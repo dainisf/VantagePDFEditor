@@ -1,0 +1,9 @@
+# Apache settings for Vantage PDF Editor (browser version).
+AddType application/wasm .wasm
+AddType application/zip .whl
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType application/wasm "access plus 30 days"
+  ExpiresByType application/zip "access plus 30 days"
+</IfModule>
+Header set X-Content-Type-Options "nosniff"

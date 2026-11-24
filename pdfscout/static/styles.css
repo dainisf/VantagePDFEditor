@@ -259,3 +259,5 @@ hr.sep { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .toolstrip { grid-column: 2; }
 .viewer { grid-column: 3; }
 .panel { grid-column: 4; }
+
+.engine-status.error { color: var(--redact); }

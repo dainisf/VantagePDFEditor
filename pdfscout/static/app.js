@@ -124,13 +124,76 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+  // ---------------------------------------------------------------- transport
+  // Browser build: requests go to the PDF engine running in a Web Worker
+  // (Python + PyMuPDF in WebAssembly). Nothing is uploaded anywhere.
+  const WEB = !!window.PDFSCOUT_WEB;
+  let engine = null;
+  const engineCalls = new Map();
+  let engineSeq = 0;
+  let engineReady = Promise.resolve();
+  function startEngine() {
+    let resolveReady, rejectReady;
+    engineReady = new Promise((res, rej) => { resolveReady = res; rejectReady = rej; });
+    engineReady.catch(() => {});
+    engine = new Worker("static/worker.js" + (window.PDFSCOUT_VERSION ? `?v=${window.PDFSCOUT_VERSION}` : ""));
+    engine.onmessage = (ev) => {
+      const m = ev.data;
+      if (m.type === "status") return engineStatus(m.text);
+      if (m.type === "ready") { engineStatus(null); return resolveReady(); }
+      if (m.type === "fatal") { engineStatus(`The PDF engine could not start: ${m.error}`, true); return rejectReady(new Error(m.error)); }
+      const call = engineCalls.get(m.id);
+      if (!call) return;
+      engineCalls.delete(m.id);
+      call(new Response(m.status === 204 ? null : m.body, { status: m.status, headers: m.headers }));
+    };
+    engine.onerror = (e) => { engineStatus(`The PDF engine could not start: ${e.message || "unknown error"}`, true); rejectReady(new Error(e.message)); };
+  }
+  function engineStatus(text, isError = false) {
+    const box = $("#engineStatus");
+    if (!box) return;
+    box.hidden = !text;
+    if (text) { $("#engineText").textContent = text; box.classList.toggle("error", isError); $(".spinner", box).hidden = isError; }
+  }
+  async function engineFetch(url, opts = {}) {
+    await engineReady;
+    const req = new Request(new URL(url, location.href), opts);
+    const body = ["GET", "HEAD"].includes(req.method) ? null : await req.arrayBuffer();
+    const headers = [...req.headers.entries()];
+    const u = new URL(req.url);
+    const path = u.pathname.slice(u.pathname.indexOf("/api/"));
+    return new Promise((resolve) => {
+      const id = ++engineSeq;
+      engineCalls.set(id, resolve);
+      engine.postMessage({ id, method: req.method, url: path + u.search, headers, body }, body ? [body] : []);
+    });
+  }
+  const transport = (url, opts) => (WEB ? engineFetch(url, opts) : fetch(url, opts));
+
+  // <img> elements can't reach the worker directly: fetch the bytes and use object URLs.
+  const objectUrls = new WeakMap();
+  function setImage(img, src) {
+    if (!WEB) { img.src = src; return; }
+    engineFetch(src).then((r) => (r.ok ? r.blob() : null)).then((blob) => {
+      if (!blob || (img.dataset.src !== src && img.dataset.thumb !== src)) return;
+      const old = objectUrls.get(img);
+      img.src = URL.createObjectURL(blob);
+      objectUrls.set(img, img.src);
+      if (old) URL.revokeObjectURL(old);
+    }).catch(() => {});
+  }
+  function releaseImages(root) {
+    if (!WEB) return;
+    $$("img", root).forEach((img) => { const u = objectUrls.get(img); if (u) URL.revokeObjectURL(u); });
+  }
+
   async function api(path, { method = "GET", json, form, raw = false, quiet = false, busyText } = {}) {
     const opts = { method, headers: {} };
     if (json !== undefined) { opts.body = JSON.stringify(json); opts.headers["Content-Type"] = "application/json"; }
     if (form) opts.body = form;
     if (!quiet) busy(true, busyText);
     try {
-      const res = await fetch(path, opts);
+      const res = await transport(path, opts);
       if (!res.ok) {
         let detail = res.statusText;
         try { const j = await res.json(); detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch (_) {}
@@ -354,6 +417,7 @@
     const viewer = $("#viewer");
     const anchor = S.doc ? S.currentPage : 0;
     const prevTop = viewer.scrollTop;
+    releaseImages(box);
     box.innerHTML = "";
     if (pageObserver) pageObserver.disconnect();
     pageObserver = new IntersectionObserver(onPageVisible, { root: viewer, rootMargin: "600px 0px" });
@@ -381,7 +445,7 @@
       const i = +el.dataset.page;
       const img = $("img", el);
       const src = `${docPath(`/pages/${i}/image`)}?scale=${renderScale()}&v=${S.doc.version}`;
-      if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
+      if (img.dataset.src !== src) { img.dataset.src = src; setImage(img, src); }
       if (S.tool === "edittext") loadTextLines(i);
     }
   }
@@ -440,9 +504,10 @@
   // ------------------------------------------------------------------ thumbnails & page organisation
   function renderThumbs() {
     const list = $("#thumbList");
+    releaseImages(list);
     list.innerHTML = "";
     const io = new IntersectionObserver((ents) => ents.forEach((en) => {
-      if (en.isIntersecting) { const img = $("img", en.target); if (!img.src) img.src = img.dataset.src; io.unobserve(en.target); }
+      if (en.isIntersecting) { const img = $("img", en.target); if (!img.getAttribute("src")) { img.dataset.thumb = img.dataset.src; setImage(img, img.dataset.src); } io.unobserve(en.target); }
     }), { root: list, rootMargin: "300px" });
     S.doc.pages.forEach((p, i) => {
       const t = document.createElement("div");
@@ -1341,7 +1406,8 @@
     },
 
     ocr(body) {
-      body.innerHTML = S.caps.ocr ? `<form>
+      body.innerHTML = WEB ? `<p class="note">Text recognition (OCR) for scanned pages is available in the Windows app. Get it from the Microsoft Store or the <a href="${esc(BRAND().website)}" target="_blank" rel="noopener">product page</a>.</p>`
+        : S.caps.ocr ? `<form>
           <p class="note">Adds an invisible, searchable text layer to scanned pages. Pages that already contain text are skipped.</p>
           <label class="field"><span>Language (Tesseract code)</span><input type="text" name="lang" value="eng" placeholder="eng, deu, fra, eng+lav…"></label>
           ${pagesField()}
@@ -1495,6 +1561,7 @@
     document.body.classList.add("panel-closed");
     renderPanel(null);
     setTool("select");
+    if (WEB) { document.body.classList.add("web"); startEngine(); }
     try { S.caps = await api("/api/capabilities", { quiet: true }); } catch (_) {}
     const onDesktop = async () => {
       document.body.classList.add("desktop");

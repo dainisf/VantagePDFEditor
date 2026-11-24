@@ -1,10 +1,30 @@
-# PDFScout
+# Vantage PDF Editor
 
-A self-hosted PDF editor covering the core of what Acrobat Pro does: edit text, **true redaction**, comments and markup, page organization, forms, signatures, stamps, protection and compression. It comes as a browser UI and a command-line tool for batch jobs.
+A free PDF editor from the [Vantage Toolkit](https://dtrvantage.com/tools/) by **DTR Networks, Inc.** It covers the core of what Acrobat Pro does: edit text, **true redaction**, comments and markup, page organization, forms, signatures, stamps, protection and compression.
 
-It runs on your own machine. Files go to the local PDFScout server only and are never sent to a third party.
+Files are always processed on the user's own computer and never uploaded. It ships three ways from one codebase:
 
-Built on [PyMuPDF](https://pymupdf.readthedocs.io/) (MuPDF) + FastAPI, with a build-free vanilla-JS front end.
+| Edition | Where | How it runs |
+|---|---|---|
+| **Browser** | `dtrvantage.com/tools/pdf-editor/` | Python + PyMuPDF compiled to WebAssembly, running in a Web Worker in the visitor's browser |
+| **Windows app** | Setup wizard (and Microsoft Store) | Native window (WebView2) with the engine inside the app |
+| **Command line / local server** | `pip install -e .` | For batch jobs and development |
+
+Built on [PyMuPDF](https://pymupdf.readthedocs.io/) (MuPDF) + FastAPI, with a build-free vanilla-JS front end. (The Python package is still called `pdfscout`, the project's original name.)
+
+## Browser version (dtrvantage.com/tools/pdf-editor)
+
+```bash
+python web/build_web.py          # -> dist-web/ (about 33 MB)
+```
+
+Upload the **contents** of `dist-web/` to `https://dtrvantage.com/tools/pdf-editor/`. All links are relative, so any folder works. Every push also builds it on GitHub (**Actions → Build and test → VantagePDFEditor-web** artifact), after testing it in Chromium under `/tools/pdf-editor/`.
+
+- **No uploads:** the PDF engine runs in the visitor's browser. The page's requests go to a Web Worker, not the network. The automated test fails if any request leaves the browser after the engine has loaded.
+- **Self-hosted:** Python, PyMuPDF and every other file is served from your own site, with no third-party CDN.
+- **First visit:** downloads about 30 MB (cached afterwards). A "Loading the PDF engine…" message shows meanwhile.
+- **Server requirements:** any static hosting. Serve `.wasm` as `application/wasm`. `web.config` (IIS) and `.htaccess` (Apache) are included for that and for caching.
+- **Not in the browser edition:** OCR (Tesseract). Everything else matches the Windows app.
 
 ## Quick start
 
@@ -18,20 +38,20 @@ Optional: install [Tesseract](https://github.com/tesseract-ocr/tesseract) (`apt 
 
 ## Windows desktop app
 
-PDFScout can run as a normal Windows program, without a browser. It opens its own window and uses the standard Windows Open/Save dialogs. The title bar shows `•` when there are unsaved changes, and you're asked before closing with unsaved work.
+Vantage PDF Editor runs as a normal Windows program, without a browser. It opens its own window and uses the standard Windows Open/Save dialogs. The title bar shows `•` when there are unsaved changes, and you're asked before closing with unsaved work.
 
-**Install:** download `PDFScout-Setup-<version>.exe` and run it. The setup wizard walks you through:
+**Install:** download `VantagePDFEditor-Setup-<version>.exe` and run it. The setup wizard walks you through:
 
 1. Welcome and license
 2. Install for just you (no admin rights needed) or for all users
 3. Install location
-4. Options: desktop shortcut, and adding PDFScout to "Open with" for PDF files
+4. Options: desktop shortcut, and adding Vantage PDF Editor to "Open with" for PDF files
 5. Install. If the Microsoft Edge WebView2 component is missing, the wizard downloads and installs it.
-6. Finish, with "Launch PDFScout" ticked
+6. Finish, with "Launch Vantage PDF Editor" ticked
 
-It creates a Start-menu entry, an optional desktop shortcut, and an uninstaller under *Settings → Apps*. On startup a "Starting PDFScout…" splash appears. If the app can't start, it shows an error message, and details go to `%LOCALAPPDATA%\PDFScout\pdfscout.log`.
+It creates a Start-menu entry, an optional desktop shortcut, and an uninstaller under *Settings → Apps*. On startup a "Starting…" splash appears. If the app can't start, it shows an error message, and details go to `%LOCALAPPDATA%\Vantage PDF Editor\pdfscout.log`.
 
-Where to get the installer: every push builds it on Windows via GitHub Actions. Open **Actions**, then the latest **Windows app** run, then the **PDFScout-Setup** artifact. Tagging a release (`v0.1.0`) attaches it to the GitHub release. Each build is tested end to end on Windows: silent install, shortcut and file-association checks, an app self-test, uninstall, and a cleanup check.
+Where to get the installer: every push builds it on Windows via GitHub Actions. Open **Actions**, then the latest **Build and test** run, then the **VantagePDFEditor-Setup** artifact. Tagging a release (`v0.1.0`) attaches it to the GitHub release. Each build is tested end to end on Windows: silent install, shortcut and file-association checks, an app self-test, uninstall, and a cleanup check.
 
 **Build the installer yourself** (Windows, Python 3.10+; installs Inno Setup automatically if needed):
 
@@ -39,9 +59,11 @@ Where to get the installer: every push builds it on Windows via GitHub Actions. 
 powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
 ```
 
-This produces `dist\PDFScout-Setup-<version>.exe`.
+This produces `dist\VantagePDFEditor-Setup-<version>.exe`.
 
 **Run from source without building:** `pip install -e ".[desktop]"`, then `pdfscout-app [file.pdf]`.
+
+The installer replaces any earlier install from when the app was called "PDFScout".
 
 Requirements: Windows 10 or 11 with the Microsoft Edge WebView2 runtime, which is preinstalled on current Windows. The window is rendered by WebView2, and the PDF engine runs inside the same process on a private localhost port, so no data leaves the PC. The installer isn't code-signed, so SmartScreen may warn when you run it (*More info → Run anyway*).
 
@@ -98,7 +120,7 @@ Redaction follows Acrobat's mark-then-apply model. Marks are only proposals unti
 3. removes vector graphics that sit entirely inside the mark,
 4. draws the fill box (black by default), with optional overlay text.
 
-PDFScout also deletes comments and links that overlap a redacted area. By default it then runs *Remove hidden information*, which strips metadata, XMP, JavaScript, attachments and hidden text. The saved file is fully rewritten, so the old content does not survive in the file's revision history.
+The editor also deletes comments and links that overlap a redacted area. By default it then runs *Remove hidden information*, which strips metadata, XMP, JavaScript, attachments and hidden text. The saved file is fully rewritten, so the old content does not survive in the file's revision history.
 
 Always open the result and use Find to confirm nothing remains, especially for scanned pages. On a scan the "text" is part of an image, so text search can't find it; mark those areas by hand.
 
@@ -111,6 +133,9 @@ pdfscout/
   server.py   FastAPI JSON API + static UI
   cli.py      command-line interface
   desktop.py  native-window desktop app (pywebview) + packaging self-test
+  webbridge.py  runs the same API inside the browser (Pyodide), no network
+  brand.py    product name, publisher and links
+web/          browser build: build_web.py, worker.js, web.config, .htaccess
   static/     index.html, app.js, styles.css (no build step)
 tests/        pytest suites for core, API and CLI
 ```
@@ -151,4 +176,4 @@ pytest
 
 ## License
 
-PyMuPDF is licensed under AGPL-3.0 (commercial licenses are available from Artifex), so this project is AGPL-3.0-or-later as well.
+PyMuPDF is licensed under AGPL-3.0 (commercial licenses are available from Artifex), so Vantage PDF Editor is AGPL-3.0-or-later as well. Wherever it is offered (website, installer, Microsoft Store), users must be able to get the corresponding source code: the app's About dialog links to it.
