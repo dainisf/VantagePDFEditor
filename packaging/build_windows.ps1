@@ -45,10 +45,12 @@ try {
 # ---------------------------------------------------------------- app build
 Step "Building the app with PyInstaller"
 if (Test-Path dist\PDFScout) { Remove-Item -Recurse -Force dist\PDFScout }
+& $py packaging\make_version_info.py $version build\version_info.txt
 & $py -m PyInstaller --noconfirm --clean --onedir --windowed `
   --name PDFScout `
   --paths . `
   --icon packaging\pdfscout.ico `
+  --version-file build\version_info.txt `
   --splash packaging\splash.png `
   --add-data "pdfscout\static;pdfscout\static" `
   --collect-all pymupdf `
@@ -56,6 +58,11 @@ if (Test-Path dist\PDFScout) { Remove-Item -Recurse -Force dist\PDFScout }
   --hidden-import clr `
   packaging\pdfscout_app.py
 if ($LASTEXITCODE) { throw "PyInstaller failed" }
+
+# Windows shows FileDescription as the app name ("Open with", Task Manager).
+$vi = (Get-Item dist\PDFScout\PDFScout.exe).VersionInfo
+Write-Host "exe name: '$($vi.FileDescription)', product: '$($vi.ProductName)', version: $($vi.FileVersion)"
+if ($vi.FileDescription -ne "PDFScout") { throw "PDFScout.exe has no 'PDFScout' description; Windows would show 'PDFScout.exe'" }
 
 function Invoke-SelfTest($exe, $report) {
   $p = Start-Process -FilePath $exe -ArgumentList "--selftest", $report -Wait -PassThru
@@ -108,6 +115,12 @@ if (-not $SkipInstallTest) {
     if ($target -ne $expected) { throw "Shortcut $lnk points to '$target', expected '$expected'" }
   }
   if (-not (Test-Path "HKCU:\Software\Classes\.pdf\OpenWithProgids")) { throw "PDF 'Open with' registration missing" }
+  $friendly = (Get-ItemProperty "HKCU:\Software\Classes\Applications\PDFScout.exe" -Name FriendlyAppName).FriendlyAppName
+  if ($friendly -ne "PDFScout") { throw "'Open with' name is '$friendly', expected 'PDFScout'" }
+  $mui = Get-ItemProperty "HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache" -ErrorAction SilentlyContinue
+  $cached = $mui.PSObject.Properties | Where-Object { $_.Name -like "*PDFScout.exe.FriendlyAppName" } | Select-Object -ExpandProperty Value
+  if ($cached -and ($cached | Where-Object { $_ -ne "PDFScout" })) { throw "Cached 'Open with' name is '$cached'" }
+  Write-Host "ok  'Open with' shows: $friendly"
   Write-Host "ok  shortcuts point to the app, PDF 'Open with' registered"
 
   Invoke-SelfTest "$dir\PDFScout.exe" "$PWD\build\selftest-installed.txt"

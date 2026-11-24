@@ -21,6 +21,7 @@ AppPublisherURL=https://github.com/dainisf/PDFScout
 AppSupportURL=https://github.com/dainisf/PDFScout/issues
 VersionInfoVersion={#AppVersion}
 VersionInfoDescription={#AppName} Setup
+VersionInfoProductName={#AppName}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=auto
@@ -69,6 +70,12 @@ Root: HKA; Subkey: "Software\Classes\{#ProgId}\shell\open\command"; ValueType: s
 Root: HKA; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#ProgId}"; ValueData: ""; Flags: uninsdeletevalue; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""; Flags: uninsdeletekey; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: pdfassoc
+; Name shown in "Open with" (otherwise Windows falls back to "PDFScout.exe").
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\Classes\{#ProgId}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Tasks: pdfassoc
+; Windows caches app names; overwrite any cached "PDFScout.exe" from older installs.
+Root: HKCU; Subkey: "Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"; ValueType: string; ValueName: "{app}\{#AppExe}.FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"; ValueType: string; ValueName: "{app}\{#AppExe}.ApplicationCompany"; ValueData: "{#AppName}"; Flags: uninsdeletevalue
 ; Registered application (lists PDFScout in Settings > Default apps)
 Root: HKA; Subkey: "Software\{#AppName}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\{#AppName}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Edit, redact and organize PDF files"; Tasks: pdfassoc
