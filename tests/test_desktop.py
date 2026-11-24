@@ -117,3 +117,11 @@ def test_startup_failure_is_reported_not_silent(monkeypatch, tmp_path):
     assert shown and "could not start" in shown[0] and "WebView2" in shown[0] and "pdfscout.log" in shown[0]
     log = (tmp_path / "PDFScout" / "pdfscout.log").read_text()
     assert "starting" in log and "startup failed" in log and "RuntimeError" in log
+
+
+def test_no_png_window_icon_on_windows(monkeypatch):
+    # System.Drawing.Icon rejects PNGs and crashes the process (seen on Windows 11).
+    monkeypatch.setattr(desktop.sys, "platform", "win32")
+    assert desktop._window_icon() is None
+    monkeypatch.setattr(desktop.sys, "platform", "linux")
+    assert desktop._window_icon().endswith("icon.png")

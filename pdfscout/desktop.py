@@ -232,6 +232,20 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def _window_icon() -> str | None:
+    """Icon file for the window, or None to use the executable's own icon.
+
+    On Windows, pywebview loads the icon with System.Drawing.Icon, which only
+    accepts .ico files: passing a PNG throws an ArgumentException on a .NET
+    thread and kills the process. The packaged .exe already embeds the .ico,
+    which WinForms uses when no icon is given, so pass nothing there.
+    """
+    if sys.platform == "win32":
+        return None
+    icon = Path(__file__).parent / "static" / "icon.png"
+    return str(icon) if icon.exists() else None
+
+
 def _windows_version() -> str:
     if sys.platform != "win32":
         return "-"
@@ -362,10 +376,9 @@ def _run_window(initial: str | None, log, smoketest: str | None = None) -> int:
         log.info("smoketest: %s", report)
         window.destroy()
 
-    icon = Path(__file__).parent / "static" / "icon.png"
     log.info("opening window")
     _close_splash()  # never let the splash overlap or block the real window
-    webview.start(_after_start, private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(icon) if icon.exists() else None, debug=False)
+    webview.start(_after_start, private_mode=False, storage_path=str(data_dir() / "webview"), icon=_window_icon(), debug=False)
     log.info("window closed")
     return state["exit"]
 
