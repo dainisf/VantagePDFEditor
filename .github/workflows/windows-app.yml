@@ -30,7 +30,7 @@ jobs:
       - name: Show self-test and install logs
         if: always()
         shell: pwsh
-        run: Get-ChildItem build -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
+        run: Get-ChildItem build -Filter selftest*.txt -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
 
       - uses: actions/upload-artifact@v4
         with:

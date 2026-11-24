@@ -89,7 +89,7 @@ if (-not (Test-Path $setup)) { throw "Installer not produced" }
 # ---------------------------------------------------------------- install test
 if (-not $SkipInstallTest) {
   Step "Testing silent install / shortcuts / uninstall"
-  $dir = Join-Path $env:TEMP "PDFScout-installtest"
+  $dir = Join-Path ([IO.Path]::GetFullPath((Get-Item $env:TEMP).FullName)) "PDFScout-installtest"
   if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
   $log = "$PWD\build\install.log"
   $p = Start-Process -FilePath $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/TASKS=desktopicon,pdfassoc", "/LOG=`"$log`"" -Wait -PassThru
@@ -101,8 +101,12 @@ if (-not $SkipInstallTest) {
     if (-not (Test-Path $f)) { throw "Missing after install: $f" }
     Write-Host "ok  $f"
   }
-  $target = (New-Object -ComObject WScript.Shell).CreateShortcut($desktop).TargetPath
-  if ($target -ne "$dir\PDFScout.exe") { throw "Desktop shortcut points to '$target'" }
+  # Compare resolved long paths (TEMP may be an 8.3 short path like RUNNER~1).
+  $expected = (Get-Item "$dir\PDFScout.exe").FullName
+  foreach ($lnk in @($startMenu, $desktop)) {
+    $target = (Get-Item (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath).FullName
+    if ($target -ne $expected) { throw "Shortcut $lnk points to '$target', expected '$expected'" }
+  }
   if (-not (Test-Path "HKCU:\Software\Classes\.pdf\OpenWithProgids")) { throw "PDF 'Open with' registration missing" }
   Write-Host "ok  shortcuts point to the app, PDF 'Open with' registered"
 
