@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDFScout</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c8102e'/%3E%3Cpath d='M9 7h9l6 6v12H9z' fill='white'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">P</span><span>PDFScout</span></div>
+    <div class="group">
+      <button class="btn" data-action="open" title="Open (Ctrl+O)"><i data-icon="folder"></i><span>Open</span></button>
+      <button class="btn" data-action="new" title="New blank PDF"><i data-icon="filePlus"></i><span>New</span></button>
+      <button class="btn primary" data-action="save" title="Download (Ctrl+S)" data-needs-doc><i data-icon="download"></i><span>Download</span></button>
+    </div>
+    <div class="group" data-needs-doc>
+      <button class="icon-btn" data-action="undo" title="Undo (Ctrl+Z)"><i data-icon="undo"></i></button>
+      <button class="icon-btn" data-action="redo" title="Redo (Ctrl+Shift+Z)"><i data-icon="redo"></i></button>
+    </div>
+    <div class="group" data-needs-doc>
+      <button class="icon-btn" data-action="zoom-out" title="Zoom out"><i data-icon="minus"></i></button>
+      <button class="btn ghost zoom-label" data-action="zoom-fit" title="Fit width"><span id="zoomLabel">100%</span></button>
+      <button class="icon-btn" data-action="zoom-in" title="Zoom in"><i data-icon="plus"></i></button>
+    </div>
+    <div class="group page-nav" data-needs-doc>
+      <input id="pageInput" type="text" inputmode="numeric" aria-label="Current page"> <span id="pageTotal">/ 0</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="search" data-needs-doc>
+      <i data-icon="search"></i>
+      <input id="searchInput" type="search" placeholder="Find text" aria-label="Find text">
+      <span id="searchCount"></span>
+      <button class="icon-btn sm" data-action="search-prev" title="Previous"><i data-icon="chevUp"></i></button>
+      <button class="icon-btn sm" data-action="search-next" title="Next"><i data-icon="chevDown"></i></button>
+    </div>
+    <button class="btn" data-action="toggle-panel" data-needs-doc title="All tools"><i data-icon="grid"></i><span>All tools</span></button>
+  </header>
+
+  <div class="optionsbar" id="optionsBar" data-needs-doc>
+    <span class="tool-name" id="toolName">Select</span>
+    <span class="tool-hint" id="toolHint"></span>
+    <div class="opts" id="toolOpts">
+      <label data-opt="color">Color <input type="color" id="optColor" value="#e5191a"></label>
+      <label data-opt="width">Width <input type="range" id="optWidth" min="0.5" max="10" step="0.5" value="2"></label>
+      <label data-opt="fontsize">Size <input type="number" id="optFontSize" min="4" max="144" value="12"></label>
+      <label data-opt="family">Font
+        <select id="optFamily"><option value="sans">Sans (Helvetica)</option><option value="serif">Serif (Times)</option><option value="mono">Mono (Courier)</option></select>
+      </label>
+      <label data-opt="style" class="toggles">
+        <button type="button" class="toggle" id="optBold" title="Bold"><b>B</b></button>
+        <button type="button" class="toggle" id="optItalic" title="Italic"><i>I</i></button>
+      </label>
+      <label data-opt="field">Field
+        <select id="optField"><option value="text">Text box</option><option value="checkbox">Check box</option><option value="combobox">Dropdown</option><option value="signature">Signature</option></select>
+      </label>
+    </div>
+  </div>
+
+  <main class="workspace">
+    <aside class="thumbs" id="thumbs" data-needs-doc>
+      <div class="thumbs-head">
+        <span>Pages</span>
+        <div>
+          <button class="icon-btn sm" data-action="pages-rotate-left" title="Rotate selected left"><i data-icon="rotL"></i></button>
+          <button class="icon-btn sm" data-action="pages-rotate-right" title="Rotate selected right"><i data-icon="rotR"></i></button>
+          <button class="icon-btn sm" data-action="pages-delete" title="Delete selected"><i data-icon="trash"></i></button>
+          <button class="icon-btn sm" data-action="pages-insert-blank" title="Insert blank page after current"><i data-icon="filePlus"></i></button>
+        </div>
+      </div>
+      <div class="thumb-list" id="thumbList"></div>
+    </aside>
+
+    <nav class="toolstrip" id="toolstrip" data-needs-doc aria-label="Tools"></nav>
+
+    <section class="viewer" id="viewer">
+      <div class="empty" id="emptyState">
+        <div class="drop">
+          <div class="drop-icon"><i data-icon="file"></i></div>
+          <h1>Edit, redact, and organize PDFs</h1>
+          <p>Drop a PDF here, or</p>
+          <div class="row">
+            <button class="btn primary lg" data-action="open"><i data-icon="folder"></i><span>Open a file</span></button>
+            <button class="btn lg" data-action="from-images"><i data-icon="image"></i><span>Create from images</span></button>
+          </div>
+          <p class="muted">Files are processed by your local PDFScout server and are never uploaded anywhere else.</p>
+        </div>
+      </div>
+      <div class="pages" id="pages"></div>
+    </section>
+
+    <aside class="panel" id="panel" data-needs-doc>
+      <div class="panel-head">
+        <button class="icon-btn sm" id="panelBack" title="All tools"><i data-icon="chevLeft"></i></button>
+        <h2 id="panelTitle">All tools</h2>
+        <button class="icon-btn sm" data-action="toggle-panel" title="Close"><i data-icon="x"></i></button>
+      </div>
+      <div class="panel-body" id="panelBody"></div>
+    </aside>
+  </main>
+
+  <input type="file" id="fileOpen" accept=".pdf,application/pdf,.xps,.epub,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" hidden>
+  <input type="file" id="fileAny" hidden>
+  <div class="toast-wrap" id="toasts" aria-live="polite"></div>
+  <div class="modal-backdrop" id="modal" hidden><div class="modal" role="dialog" aria-modal="true"></div></div>
+  <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">Working…</span></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
