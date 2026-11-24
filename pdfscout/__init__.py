@@ -1,3 +1,3 @@
-"""PDFScout - a self-hosted PDF editor: edit, redact, organize, protect."""
+"""Vantage PDF Editor (package: pdfscout) - edit, redact, organize and protect PDFs locally."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

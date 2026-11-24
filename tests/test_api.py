@@ -38,7 +38,8 @@ def download(client, sid, **body):
 
 
 def test_index_and_capabilities(client):
-    assert "PDFScout" in client.get("/").text
+    assert "Vantage PDF Editor" in client.get("/").text
+    assert client.get("/api/capabilities").json()["brand"]["publisher"] == "DTR Networks, Inc."
     caps = client.get("/api/capabilities").json()
     assert "email" in caps["presets"] and "redact_areas" in caps["ops"]
 

@@ -13,13 +13,13 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, Up
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, core
+from . import __version__, brand, core
 from .store import DocumentStore, Session
 
 STATIC = Path(__file__).parent / "static"
 MAX_BYTES = int(float(os.environ.get("PDFSCOUT_MAX_MB", "200")) * 1024 * 1024)
 
-app = FastAPI(title="PDFScout", version=__version__)
+app = FastAPI(title=brand.PRODUCT_NAME, version=__version__)
 store = DocumentStore()
 
 
@@ -181,6 +181,7 @@ OPS: dict[str, tuple[str | Callable[[dict], str], Callable[[pymupdf.Document, di
 def capabilities():
     return {
         "version": __version__,
+        "brand": brand.as_dict(),
         "ocr": core.ocr_available(),
         "presets": {k: v[0] for k, v in core.REDACTION_PRESETS.items()},
         "ops": sorted(OPS),

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdfscout"
-version = "0.1.0"
-description = "Self-hosted PDF editor: edit text, true redaction, annotate, organize pages, forms, protect, compress."
+version = "0.2.0"
+description = "Vantage PDF Editor: self-hosted PDF editor: edit text, true redaction, annotate, organize pages, forms, protect, compress."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }

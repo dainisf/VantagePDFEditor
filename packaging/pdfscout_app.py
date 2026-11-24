@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the PDFScout desktop app."""
+"""PyInstaller entry point for the Vantage PDF Editor desktop app."""
 
 import sys
 

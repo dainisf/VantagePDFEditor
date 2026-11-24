@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PDFScout</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="icon" href="/static/icon.png">
+  <title>Vantage PDF Editor</title>
+  <meta name="description" content="Free PDF editor from Vantage by DTR Networks: edit text, permanently redact, sign and organize PDFs. Files stay on your computer.">
+  <link rel="stylesheet" href="static/styles.css">
+  <link rel="icon" href="static/icon.png">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">P</span><span>PDFScout</span></div>
+    <a class="brand" href="#" data-action="about" title="About Vantage PDF Editor"><span class="logo"><img src="static/icon.png" alt=""></span><span class="brand-name"><b>Vantage</b> PDF Editor</span></a>
     <div class="group">
       <button class="btn" data-action="open" title="Open (Ctrl+O)"><i data-icon="folder"></i><span>Open</span></button>
       <button class="btn" data-action="new" title="New blank PDF"><i data-icon="filePlus"></i><span>New</span></button>
@@ -84,7 +85,9 @@
             <button class="btn primary lg" data-action="open"><i data-icon="folder"></i><span>Open a file</span></button>
             <button class="btn lg" data-action="from-images"><i data-icon="image"></i><span>Create from images</span></button>
           </div>
-          <p class="muted">Files are processed by your local PDFScout server and are never uploaded anywhere else.</p>
+          <p class="muted" id="privacyNote">Your files are processed on this computer and are never uploaded.</p>
+          <p class="engine-status" id="engineStatus" hidden><span class="spinner sm"></span><span id="engineText">Loading the PDF engine…</span></p>
+          <p class="credit">A free tool from <a href="https://dtrvantage.com/tools/" target="_blank" rel="noopener">Vantage Toolkit</a> by DTR Networks, Inc. · <a href="#" data-action="about">About</a></p>
         </div>
       </div>
       <div class="pages" id="pages"></div>
@@ -106,6 +109,6 @@
   <div class="modal-backdrop" id="modal" hidden><div class="modal" role="dialog" aria-modal="true"></div></div>
   <div class="busy" id="busy" hidden><div class="spinner"></div><span id="busyText">Working…</span></div>
 
-  <script src="/static/app.js"></script>
+  <script src="static/app.js"></script>
 </body>
 </html>

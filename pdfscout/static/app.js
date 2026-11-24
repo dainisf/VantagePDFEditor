@@ -1,4 +1,4 @@
-/* PDFScout web client. Plain JS, no build step. */
+/* Vantage PDF Editor client (desktop app and browser build). Plain JS, no build step. */
 (() => {
   "use strict";
 
@@ -200,7 +200,7 @@
   const isDirty = () => !!S.doc && S.savedVersion !== S.doc.version;
   function updateTitle() {
     if (!S.doc) return;
-    document.title = `${isDirty() ? "• " : ""}${S.doc.filename} – PDFScout`;
+    document.title = `${isDirty() ? "• " : ""}${S.doc.filename} – ${BRAND().product}`;
     const dk = desktop();
     if (dk) dk.set_state(S.doc.filename, isDirty()).catch(() => {});
   }
@@ -1347,7 +1347,7 @@
           ${pagesField()}
           <label class="check"><input type="checkbox" name="all"> Also process pages that already have text</label>
           <div class="actions"><button class="btn primary" type="submit">Recognize text</button></div></form>`
-        : `<p class="note warn">OCR needs <b>Tesseract</b> installed on the machine running PDFScout.<br><br>Debian/Ubuntu: <code>sudo apt install tesseract-ocr</code><br>macOS: <code>brew install tesseract</code><br><br>Restart PDFScout afterwards.</p>`;
+        : `<p class="note warn">OCR needs <b>Tesseract</b> installed on this computer.<br><br>Debian/Ubuntu: <code>sudo apt install tesseract-ocr</code><br>macOS: <code>brew install tesseract</code><br><br>Restart the app afterwards.</p>`;
       const f = $("form", body);
       if (f) f.onsubmit = (e) => {
         e.preventDefault();
@@ -1385,7 +1385,34 @@
   };
 
   // ------------------------------------------------------------------ actions & keyboard
+  const BRAND = () => Object.assign({
+    product: "Vantage PDF Editor", publisher: "DTR Networks, Inc.",
+    website: "https://dtrvantage.com/tools/pdf-editor/", toolkit_url: "https://dtrvantage.com/tools/",
+    vantage_url: "https://dtrvantage.com/", source_url: "https://github.com/dainisf/PDFScout", license: "GNU AGPL-3.0-or-later",
+  }, (S.caps && S.caps.brand) || {});
+
+  function aboutDialog() {
+    const b = BRAND();
+    const where = desktop() ? "Windows app" : (window.PDFSCOUT_WEB ? "Runs in your browser" : "Local server");
+    return modal(`<div class="about">
+      <img src="static/icon.png" alt="">
+      <h3>${esc(b.product)}</h3>
+      <div class="ver">Version ${esc(S.caps.version || "")} · ${esc(where)}</div>
+      <p>Edit, redact, sign and organize PDFs. Your files are processed on this computer and never uploaded.</p>
+      <div class="links">
+        <a href="${esc(b.toolkit_url)}" target="_blank" rel="noopener">Vantage Toolkit</a>
+        <a href="${esc(b.website)}" target="_blank" rel="noopener">Product page</a>
+        <a href="${esc(b.vantage_url)}" target="_blank" rel="noopener">Vantage by DTR Networks</a>
+        <a href="${esc(b.source_url)}" target="_blank" rel="noopener">Source code</a>
+      </div>
+      <div class="legal">© ${new Date().getFullYear()} ${esc(b.publisher)}. Free software under the ${esc(b.license)} license.<br>
+        Built with MuPDF/PyMuPDF (© Artifex Software, AGPL). Provided without warranty.</div>
+      <div class="actions" style="justify-content:center;margin-top:16px"><button class="btn primary" data-close>Close</button></div>
+    </div>`);
+  }
+
   const ACTIONS = {
+    about: aboutDialog,
     open: async () => {
       if (isDirty() && !(await confirmDialog("Open another file", "Your changes to the current document haven't been saved. Open another file anyway?", "Open"))) return;
       desktop() ? nativeOpen() : $("#fileOpen").click();
@@ -1406,7 +1433,12 @@
     "pages-delete": async () => { const p = selectedPages(); if (await confirmDialog("Delete pages", `Delete page${p.length > 1 ? "s" : ""} ${p.map((x) => x + 1).join(", ")}?`, "Delete", true)) { S.selected.clear(); op("delete_pages", { pages: p }).catch(() => {}); } },
     "pages-insert-blank": () => op("insert_blank", { at: S.currentPage + 1 }).catch(() => {}),
   };
-  document.addEventListener("click", (e) => { const b = e.target.closest("[data-action]"); if (b && !b.disabled) ACTIONS[b.dataset.action]?.(); });
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-action]");
+    if (!b || b.disabled) return;
+    if (b.tagName === "A") e.preventDefault();
+    ACTIONS[b.dataset.action]?.();
+  });
 
   $("#panelBack").onclick = () => { S.panel = null; renderPanel(null); };
   $("#fileOpen").onchange = (e) => { openFile(e.target.files[0]); e.target.value = ""; };

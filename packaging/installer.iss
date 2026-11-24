@@ -1,29 +1,37 @@
-; PDFScout Windows installer (Inno Setup 6)
+; Vantage PDF Editor Windows installer (Inno Setup 6)
 ; Built by packaging\build_windows.ps1 or the "Windows app" GitHub workflow:
-;   iscc /DAppVersion=0.1.0 packaging\installer.iss
-; Expects the PyInstaller one-folder build in dist\PDFScout\ and the license in
-; build\license.txt.
+;   iscc /DAppVersion=0.2.0 packaging\installer.iss
+; Expects the PyInstaller one-folder build in dist\VantagePDFEditor\ and the
+; license in build\license.txt.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
-#define AppName "PDFScout"
-#define AppExe "PDFScout.exe"
-#define ProgId "PDFScout.Document"
+#define AppName "Vantage PDF Editor"
+#define AppExeBase "VantagePDFEditor"
+#define AppExe "VantagePDFEditor.exe"
+#define ProgId "Vantage.PDFEditor.Document"
+#define Publisher "DTR Networks, Inc."
+#define AppUrl "https://dtrvantage.com/tools/pdf-editor/"
+; AppId of the earlier "PDFScout" builds, removed on install.
+#define OldAppId "{E02E04A0-AF28-4144-AA59-446B805FDBEA}"
 
 [Setup]
-AppId={{E02E04A0-AF28-4144-AA59-446B805FDBEA}
+AppId={{76A0CA9F-FDB5-40AB-B57F-F04E92985C05}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=PDFScout
-AppPublisherURL=https://github.com/dainisf/PDFScout
-AppSupportURL=https://github.com/dainisf/PDFScout/issues
+AppPublisher={#Publisher}
+AppPublisherURL=https://dtrvantage.com/
+AppSupportURL={#AppUrl}
+AppUpdatesURL={#AppUrl}
+AppCopyright=(C) {#Publisher}
+VersionInfoCompany={#Publisher}
 VersionInfoVersion={#AppVersion}
 VersionInfoDescription={#AppName} Setup
 VersionInfoProductName={#AppName}
-DefaultDirName={autopf}\{#AppName}
-DefaultGroupName={#AppName}
+DefaultDirName={autopf}\Vantage\PDF Editor
+DefaultGroupName=Vantage
 DisableProgramGroupPage=auto
 ; Lets the user pick "Install for me only" (no admin) or "for all users".
 PrivilegesRequired=lowest
@@ -40,7 +48,7 @@ WizardSizePercent=110
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir=..\dist
-OutputBaseFilename=PDFScout-Setup-{#AppVersion}
+OutputBaseFilename=VantagePDFEditor-Setup-{#AppVersion}
 CloseApplications=yes
 RestartApplications=no
 ChangesAssociations=yes
@@ -50,10 +58,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
-Name: "pdfassoc"; Description: "Add PDFScout to ""Open with"" for PDF files"; GroupDescription: "File types:"
+Name: "pdfassoc"; Description: "Add {#AppName} to ""Open with"" for PDF files"; GroupDescription: "File types:"
 
 [Files]
-Source: "..\dist\PDFScout\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\{#AppExeBase}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\build\license.txt"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
@@ -70,17 +78,19 @@ Root: HKA; Subkey: "Software\Classes\{#ProgId}\shell\open\command"; ValueType: s
 Root: HKA; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "{#ProgId}"; ValueData: ""; Flags: uninsdeletevalue; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""; Flags: uninsdeletekey; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: pdfassoc
-; Name shown in "Open with" (otherwise Windows falls back to "PDFScout.exe").
+; Name shown in "Open with" (otherwise Windows falls back to the .exe file name).
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Tasks: pdfassoc
 Root: HKA; Subkey: "Software\Classes\{#ProgId}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Tasks: pdfassoc
-; Windows caches app names; overwrite any cached "PDFScout.exe" from older installs.
+; Windows caches app names; make sure the cached name is the product name.
 Root: HKCU; Subkey: "Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"; ValueType: string; ValueName: "{app}\{#AppExe}.FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"; ValueType: string; ValueName: "{app}\{#AppExe}.ApplicationCompany"; ValueData: "{#AppName}"; Flags: uninsdeletevalue
-; Registered application (lists PDFScout in Settings > Default apps)
-Root: HKA; Subkey: "Software\{#AppName}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: pdfassoc
-Root: HKA; Subkey: "Software\{#AppName}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Edit, redact and organize PDF files"; Tasks: pdfassoc
-Root: HKA; Subkey: "Software\{#AppName}\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#ProgId}"; Tasks: pdfassoc
-Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "Software\{#AppName}\Capabilities"; Flags: uninsdeletevalue; Tasks: pdfassoc
+; Registered application (listed in Settings > Default apps)
+Root: HKA; Subkey: "Software\DTR Networks"; Flags: uninsdeletekeyifempty; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\DTR Networks\{#AppExeBase}"; Flags: uninsdeletekeyifempty; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\DTR Networks\{#AppExeBase}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\DTR Networks\{#AppExeBase}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Edit, redact and organize PDF files"; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\DTR Networks\{#AppExeBase}\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "{#ProgId}"; Tasks: pdfassoc
+Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppExeBase}"; ValueData: "Software\DTR Networks\{#AppExeBase}\Capabilities"; Flags: uninsdeletevalue; Tasks: pdfassoc
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
@@ -113,7 +123,7 @@ end;
 
 procedure InitializeWizard;
 begin
-  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), 'Downloading the Microsoft Edge WebView2 component PDFScout needs...', nil);
+  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), 'Downloading the Microsoft Edge WebView2 component {#AppName} needs...', nil);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -131,13 +141,38 @@ begin
         DownloadPage.Download;
         DownloadPage.SetText('Installing Microsoft Edge WebView2...', '');
         if not Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe'), '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-          MsgBox('Microsoft Edge WebView2 could not be installed (code ' + IntToStr(ResultCode) + '). PDFScout will be installed, but you may need to install WebView2 from microsoft.com before it can open.', mbInformation, MB_OK);
+          MsgBox('Microsoft Edge WebView2 could not be installed (code ' + IntToStr(ResultCode) + '). {#AppName} will be installed, but you may need to install WebView2 from microsoft.com before it can open.', mbInformation, MB_OK);
       except
         if not WizardSilent then
-          MsgBox('Could not download Microsoft Edge WebView2: ' + GetExceptionMessage + #13#10#13#10 + 'PDFScout will be installed, but you may need to install WebView2 from microsoft.com before it can open.', mbInformation, MB_OK);
+          MsgBox('Could not download Microsoft Edge WebView2: ' + GetExceptionMessage + #13#10#13#10 + '{#AppName} will be installed, but you may need to install WebView2 from microsoft.com before it can open.', mbInformation, MB_OK);
       end;
     finally
       DownloadPage.Hide;
     end;
   end;
 end;
+
+{ Earlier builds were called "PDFScout". Remove that install silently so the
+  user doesn't end up with two copies. }
+function OldUninstaller(var Cmd: String): Boolean;
+var
+  Key: String;
+begin
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#OldAppId}_is1';
+  Result := RegQueryStringValue(HKCU, Key, 'UninstallString', Cmd) or
+            RegQueryStringValue(HKLM64, Key, 'UninstallString', Cmd) or
+            RegQueryStringValue(HKLM32, Key, 'UninstallString', Cmd);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Cmd: String;
+  ResultCode: Integer;
+begin
+  if (CurStep = ssInstall) and OldUninstaller(Cmd) then
+  begin
+    WizardForm.StatusLabel.Caption := 'Removing the previous version (PDFScout)...';
+    Exec(RemoveQuotes(Cmd), '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
+

@@ -1,4 +1,4 @@
-"""PDFScout as a desktop application.
+"""Vantage PDF Editor as a desktop application.
 
 Runs the editor engine on a private localhost port inside this process and
 shows the UI in a native window (Edge WebView2 on Windows, WebKit on macOS,
@@ -23,9 +23,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import __version__, core
+from . import __version__, brand, core
 
-APP_NAME = "PDFScout"
+APP_NAME = brand.PRODUCT_NAME
 PDF_TYPES = ("PDF files (*.pdf)", "Documents and images (*.pdf;*.xps;*.epub;*.png;*.jpg;*.jpeg;*.tif;*.tiff)", "All files (*.*)")
 
 
@@ -62,7 +62,7 @@ def start_server() -> tuple[str, object]:
     deadline = time.time() + 20
     while not server.started:
         if time.time() > deadline:
-            raise RuntimeError("PDFScout engine did not start")
+            raise RuntimeError(f"{APP_NAME} engine did not start")
         time.sleep(0.05)
     return f"http://127.0.0.1:{port}", server
 
@@ -165,11 +165,11 @@ def selftest(report: str | None) -> int:
     ok = True
     try:
         base, _ = start_server()
-        out.write(f"PDFScout {__version__} engine at {base}\n")
+        out.write(f"{APP_NAME} {__version__} engine at {base}\n")
         caps = json.loads(urllib.request.urlopen(base + "/api/capabilities", timeout=20).read())
         out.write(f"capabilities: ocr={caps['ocr']} ops={len(caps['ops'])}\n")
         html = urllib.request.urlopen(base + "/", timeout=20).read().decode()
-        assert "PDFScout" in html, "UI not bundled"
+        assert "brand" in html and "app.js" in html, "UI not bundled"
         js = urllib.request.urlopen(base + "/static/app.js", timeout=20).read()
         assert len(js) > 10000, "app.js missing"
         import pymupdf
@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = []
     initial = next((a for a in argv if not a.startswith("-") and Path(a).is_file()), None)
     log = _setup_logging()
-    log.info("PDFScout %s starting (frozen=%s, python=%s, windows=%s, args=%s)", __version__, getattr(sys, "frozen", False), sys.version.split()[0], _windows_version(), argv)
+    log.info(APP_NAME + " %s starting (frozen=%s, python=%s, windows=%s, args=%s)", __version__, getattr(sys, "frozen", False), sys.version.split()[0], _windows_version(), argv)
     try:
         return _run_window(initial, log, smoketest)
     except Exception as e:  # noqa: BLE001 - last-resort handler: never exit silently
@@ -227,8 +227,8 @@ def main(argv: list[str] | None = None) -> int:
         _close_splash()
         hint = ""
         if "webview2" in str(e).lower() or "edgechromium" in str(e).lower() or type(e).__name__ in ("WebViewException",):
-            hint = "\n\nPDFScout needs the Microsoft Edge WebView2 runtime. Install it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again."
-        show_error(f"PDFScout could not start.\n\n{type(e).__name__}: {e}{hint}\n\nDetails were written to:\n{_log_path()}")
+            hint = f"\n\n{APP_NAME} needs the Microsoft Edge WebView2 runtime. Install it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again."
+        show_error(f"{APP_NAME} could not start.\n\n{type(e).__name__}: {e}{hint}\n\nDetails were written to:\n{_log_path()}")
         return 1
 
 
@@ -343,7 +343,7 @@ def _run_window(initial: str | None, log, smoketest: str | None = None) -> int:
             Path(smoketest).write_text(f"SMOKETEST FAILED: window not loaded after {STARTUP_TIMEOUT}s (shown={state['shown']})\n", encoding="utf-8")
             os._exit(3)
         show_error(
-            "PDFScout started but its window did not open.\n\n"
+            f"{APP_NAME} started but its window did not open.\n\n"
             "This usually means the Microsoft Edge WebView2 runtime is missing or damaged. "
             "Reinstall it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again.\n\n"
             f"Details were written to:\n{_log_path()}"

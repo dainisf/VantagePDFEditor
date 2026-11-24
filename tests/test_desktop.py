@@ -90,7 +90,7 @@ def test_close_confirmation_and_title(base):
     win = FakeWindow(confirm=False)
     api._attach(win)
     api.set_state("a.pdf", False)
-    assert win.title == "a.pdf – PDFScout" and api._on_closing() is True
+    assert win.title == "a.pdf – Vantage PDF Editor" and api._on_closing() is True
     api.set_state("a.pdf", True)
     assert win.title.startswith("• ") and api._on_closing() is False
     win.confirm = True
@@ -115,7 +115,7 @@ def test_startup_failure_is_reported_not_silent(monkeypatch, tmp_path):
     monkeypatch.setattr(desktop, "_run_window", boom)
     assert desktop.main([]) == 1
     assert shown and "could not start" in shown[0] and "WebView2" in shown[0] and "pdfscout.log" in shown[0]
-    log = (tmp_path / "PDFScout" / "pdfscout.log").read_text()
+    log = (tmp_path / "Vantage PDF Editor" / "pdfscout.log").read_text()
     assert "starting" in log and "startup failed" in log and "RuntimeError" in log
 
 
