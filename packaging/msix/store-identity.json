@@ -1,0 +1,6 @@
+{
+  "_comment": "Replace these with the values from Partner Center > your app > Product identity once 'Vantage PDF Editor' is reserved. The placeholders build a test package only.",
+  "IdentityName": "DTRNetworks.VantagePDFEditor",
+  "Publisher": "CN=DTR Networks Test",
+  "PublisherDisplayName": "DTR Networks, Inc."
+}

@@ -51,3 +51,21 @@ sp.insert_text((167, 160), "by DTR Networks, Inc.", fontsize=12, fontname="helv"
 sp.insert_text((167, 192), "Starting...", fontsize=12, fontname="helv", color=red)
 sd[0].get_pixmap(dpi=96).save(str(ROOT / "packaging" / "splash.png"))
 print("icons written")
+
+# Microsoft Store / MSIX logo assets.
+assets = ROOT / "packaging" / "msix" / "Assets"
+assets.mkdir(parents=True, exist_ok=True)
+for name, (w, h) in {
+    "StoreLogo.png": (50, 50),
+    "Square44x44Logo.png": (44, 44),
+    "Square44x44Logo.targetsize-256_altform-unplated.png": (256, 256),
+    "Square150x150Logo.png": (150, 150),
+    "Wide310x150Logo.png": (310, 150),
+    "LargeTile.png": (310, 310),
+}.items():
+    side = min(w, h)
+    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    logo = img.resize((side, side), Image.LANCZOS)
+    canvas.paste(logo, ((w - side) // 2, (h - side) // 2), logo)
+    canvas.save(assets / name)
+print("msix assets written")
