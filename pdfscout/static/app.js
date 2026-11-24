@@ -136,12 +136,14 @@
     let resolveReady, rejectReady;
     engineReady = new Promise((res, rej) => { resolveReady = res; rejectReady = rej; });
     engineReady.catch(() => {});
+    document.body.dataset.engine = "loading";
+    engineStatus("Starting the PDF engine…");
     engine = new Worker("static/worker.js" + (window.PDFSCOUT_VERSION ? `?v=${window.PDFSCOUT_VERSION}` : ""));
     engine.onmessage = (ev) => {
       const m = ev.data;
       if (m.type === "status") return engineStatus(m.text);
-      if (m.type === "ready") { engineStatus(null); return resolveReady(); }
-      if (m.type === "fatal") { engineStatus(`The PDF engine could not start: ${m.error}`, true); return rejectReady(new Error(m.error)); }
+      if (m.type === "ready") { engineStatus(null); document.body.dataset.engine = "ready"; return resolveReady(); }
+      if (m.type === "fatal") { engineStatus(`The PDF engine could not start: ${m.error}`, true); document.body.dataset.engine = "error"; return rejectReady(new Error(m.error)); }
       const call = engineCalls.get(m.id);
       if (!call) return;
       engineCalls.delete(m.id);

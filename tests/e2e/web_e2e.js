@@ -18,7 +18,9 @@ const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
 
   const t0 = Date.now();
   await pg.goto(URL);
-  await pg.waitForFunction(() => document.querySelector('#engineStatus').hidden, null, { timeout: 180000 });
+  // Wait for the worker's explicit ready signal (the status line starts hidden, so it can't be used).
+  await pg.waitForFunction(() => document.body.dataset.engine === 'ready' || document.body.dataset.engine === 'error', null, { timeout: 180000 });
+  if (await pg.evaluate(() => document.body.dataset.engine) !== 'ready') fail('engine failed: ' + await pg.textContent('#engineText'));
   console.log(`engine ready after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   const loaded = requests.length;
 
