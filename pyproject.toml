@@ -9,6 +9,7 @@ description = "Vantage PDF Editor: self-hosted PDF editor: edit text, true redac
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "DTR Networks, Inc." }]
 dependencies = [
   "pymupdf>=1.24.10",
   "fastapi>=0.110",

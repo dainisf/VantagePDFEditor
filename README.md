@@ -176,4 +176,6 @@ pytest
 
 ## License
 
-PyMuPDF is licensed under AGPL-3.0 (commercial licenses are available from Artifex), so Vantage PDF Editor is AGPL-3.0-or-later as well. Wherever it is offered (website, installer, Microsoft Store), users must be able to get the corresponding source code: the app's About dialog links to it.
+Copyright (C) 2026 DTR Networks, Inc. Vantage PDF Editor is free software under the [GNU Affero General Public License v3.0 or later](LICENSE); see [NOTICE](NOTICE) for third-party components.
+
+It builds on PyMuPDF/MuPDF, which Artifex licenses under the AGPL (commercial licenses are available from Artifex). Wherever the editor is offered (website, installer, Microsoft Store), users must be able to get the corresponding source code. This public repository serves that purpose, and the app's About dialog links to it.

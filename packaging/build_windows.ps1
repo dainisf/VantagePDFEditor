@@ -33,16 +33,12 @@ $exeName = & $py -c "from pdfscout import brand; print(brand.EXE_NAME)"
 Write-Host "$product version $version ($exeName.exe)"
 
 # ---------------------------------------------------------------- license
-Step "Fetching license text"
+Step "Preparing license text"
 New-Item -ItemType Directory -Force build | Out-Null
 $lic = "build\license.txt"
-try {
-  $agpl = (Invoke-WebRequest -UseBasicParsing https://www.gnu.org/licenses/agpl-3.0.txt).Content
-  Set-Content -Path $lic -Value ((Get-Content LICENSE -Raw) + "`r`n`r`n" + $agpl) -Encoding UTF8
-} catch {
-  Write-Warning "Could not download the AGPL text ($_); using the short LICENSE notice."
-  Copy-Item LICENSE $lic -Force
-}
+# Wizard license page: copyright/third-party notice followed by the full AGPL.
+Set-Content -Path $lic -Value ((Get-Content NOTICE -Raw) + "`r`n`r`n" + (Get-Content LICENSE -Raw)) -Encoding UTF8
+if ((Get-Item $lic).Length -lt 30000) { throw "license text looks incomplete" }
 
 # ---------------------------------------------------------------- app build
 Step "Building the app with PyInstaller"
