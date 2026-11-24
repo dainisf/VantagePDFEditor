@@ -101,3 +101,19 @@ def test_selftest(tmp_path):
     report = tmp_path / "r.txt"
     assert desktop.selftest(str(report)) == 0
     assert "SELFTEST PASSED" in report.read_text()
+
+
+def test_startup_failure_is_reported_not_silent(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    shown = []
+    monkeypatch.setattr(desktop, "show_error", shown.append)
+
+    def boom(*a):
+        raise RuntimeError("WebView2 runtime not found")
+
+    monkeypatch.setattr(desktop, "_run_window", boom)
+    assert desktop.main([]) == 1
+    assert shown and "could not start" in shown[0] and "WebView2" in shown[0] and "pdfscout.log" in shown[0]
+    log = (tmp_path / "PDFScout" / "pdfscout.log").read_text()
+    assert "starting" in log and "startup failed" in log and "RuntimeError" in log

@@ -17,40 +17,28 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install
+      - name: Tests
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[desktop,build,dev]"
+          pip install -e ".[desktop,dev]"
+          pytest -q
 
-      - name: Tests
-        run: pytest -q
-
-      - name: Build PDFScout.exe
-        run: >
-          pyinstaller --noconfirm --clean --onefile --windowed
-          --name PDFScout
-          --paths .
-          --icon packaging\pdfscout.ico
-          --add-data "pdfscout\static;pdfscout\static"
-          --collect-all pymupdf
-          --collect-all webview
-          --hidden-import clr
-          packaging\pdfscout_app.py
-
-      - name: Self-test the packaged app
+      - name: Build, test and package the installer
         shell: pwsh
-        run: |
-          $p = Start-Process -FilePath dist\PDFScout.exe -ArgumentList "--selftest", "selftest.txt" -Wait -PassThru
-          Get-Content selftest.txt
-          if ($p.ExitCode -ne 0) { exit 1 }
+        run: ./packaging/build_windows.ps1 -NoVenv
+
+      - name: Show self-test and install logs
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem build -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PDFScout-windows
-          path: dist/PDFScout.exe
+          name: PDFScout-Setup
+          path: dist/PDFScout-Setup-*.exe
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/PDFScout.exe
+          files: dist/PDFScout-Setup-*.exe

@@ -20,19 +20,30 @@ Optional: install [Tesseract](https://github.com/tesseract-ocr/tesseract) (`apt 
 
 PDFScout can run as a normal Windows program, without a browser. It opens its own window and uses the standard Windows Open/Save dialogs. The title bar shows `•` when there are unsaved changes, and you're asked before closing with unsaved work.
 
-**Get `PDFScout.exe`:** every push builds it on Windows via GitHub Actions. Open the **Actions** tab, then the latest **Windows app** run, and download the **PDFScout-windows** artifact. Tagging a release (`v0.1.0`) also attaches the .exe to the GitHub release. It's a single file with nothing to install. You can double-click it, drag a PDF onto it, or use *Open with → PDFScout*.
+**Install:** download `PDFScout-Setup-<version>.exe` and run it. The setup wizard walks you through:
 
-**Build it yourself** (Windows, Python 3.10+):
+1. Welcome and license
+2. Install for just you (no admin rights needed) or for all users
+3. Install location
+4. Options: desktop shortcut, and adding PDFScout to "Open with" for PDF files
+5. Install. If the Microsoft Edge WebView2 component is missing, the wizard downloads and installs it.
+6. Finish, with "Launch PDFScout" ticked
+
+It creates a Start-menu entry, an optional desktop shortcut, and an uninstaller under *Settings → Apps*. On startup a "Starting PDFScout…" splash appears. If the app can't start, it shows an error message, and details go to `%LOCALAPPDATA%\PDFScout\pdfscout.log`.
+
+Where to get the installer: every push builds it on Windows via GitHub Actions. Open **Actions**, then the latest **Windows app** run, then the **PDFScout-Setup** artifact. Tagging a release (`v0.1.0`) attaches it to the GitHub release. Each build is tested end to end on Windows: silent install, shortcut and file-association checks, an app self-test, uninstall, and a cleanup check.
+
+**Build the installer yourself** (Windows, Python 3.10+; installs Inno Setup automatically if needed):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
 ```
 
-This produces `dist\PDFScout.exe` and runs a packaging self-test.
+This produces `dist\PDFScout-Setup-<version>.exe`.
 
 **Run from source without building:** `pip install -e ".[desktop]"`, then `pdfscout-app [file.pdf]`.
 
-Requirements: Windows 10 or 11 with the Microsoft Edge WebView2 runtime, which is preinstalled on current Windows. The window is rendered by WebView2, and the PDF engine runs inside the same process on a private localhost port, so no data leaves the PC. The .exe isn't code-signed, so SmartScreen may warn on first launch (*More info → Run anyway*).
+Requirements: Windows 10 or 11 with the Microsoft Edge WebView2 runtime, which is preinstalled on current Windows. The window is rendered by WebView2, and the PDF engine runs inside the same process on a private localhost port, so no data leaves the PC. The installer isn't code-signed, so SmartScreen may warn when you run it (*More info → Run anyway*).
 
 ## Features
 

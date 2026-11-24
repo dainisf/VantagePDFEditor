@@ -208,20 +208,86 @@ def main(argv: list[str] | None = None) -> int:
     _fix_std_streams()
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--selftest":
+        _close_splash()
         return selftest(argv[1] if len(argv) > 1 else None)
     if argv and argv[0] in ("--version", "-V"):
         print(__version__)
         return 0
     initial = next((a for a in argv if not a.startswith("-") and Path(a).is_file()), None)
+    log = _setup_logging()
+    log.info("PDFScout %s starting (frozen=%s, args=%s)", __version__, getattr(sys, "frozen", False), argv)
+    try:
+        return _run_window(initial, log)
+    except Exception as e:  # noqa: BLE001 - last-resort handler: never exit silently
+        log.exception("startup failed")
+        _close_splash()
+        hint = ""
+        if "webview2" in str(e).lower() or "edgechromium" in str(e).lower() or type(e).__name__ in ("WebViewException",):
+            hint = "\n\nPDFScout needs the Microsoft Edge WebView2 runtime. Install it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again."
+        show_error(f"PDFScout could not start.\n\n{type(e).__name__}: {e}{hint}\n\nDetails were written to:\n{_log_path()}")
+        return 1
 
+
+def _log_path() -> Path:
+    return data_dir() / "pdfscout.log"
+
+
+def _setup_logging():
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    log = logging.getLogger("pdfscout")
+    if not log.handlers:
+        try:
+            h = RotatingFileHandler(_log_path(), maxBytes=1_000_000, backupCount=2, encoding="utf-8")
+            h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+            log.addHandler(h)
+        except OSError:
+            pass
+        log.setLevel(logging.INFO)
+    return log
+
+
+def show_error(message: str) -> None:
+    """Show an error the user can actually see (windowed builds have no console)."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(None, message, APP_NAME, 0x10 | 0x40000)  # MB_ICONERROR | MB_TOPMOST
+            return
+    except Exception:  # noqa: BLE001
+        pass
+    sys.stderr.write(message + "\n")
+
+
+def _close_splash() -> None:
+    """Close the PyInstaller splash screen if the build has one."""
+    try:
+        import pyi_splash  # type: ignore[import-not-found]
+
+        pyi_splash.close()
+    except Exception:  # noqa: BLE001 - not a splash build
+        pass
+
+
+def _run_window(initial: str | None, log) -> int:
     import webview
 
     base, _ = start_server()
+    log.info("engine listening at %s", base)
     api = DesktopApi(base, str(Path(initial).resolve()) if initial else None)
     window = webview.create_window(APP_NAME, base + "/", js_api=api, width=1400, height=900, min_size=(860, 560), text_select=True, background_color="#EEF0F3")
     api._attach(window)
+
+    def _shown():
+        log.info("window shown")
+        _close_splash()
+
+    window.events.shown += _shown
     icon = Path(__file__).parent / "static" / "icon.png"
     webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(icon) if icon.exists() else None)
+    log.info("window closed")
     return 0
 
 

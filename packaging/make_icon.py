@@ -37,4 +37,16 @@ for x in range(SIZE):
 
 img.save(ROOT / "pdfscout" / "static" / "icon.png")
 img.save(ROOT / "packaging" / "pdfscout.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+# Splash shown by PyInstaller while the app starts.
+sd = pymupdf.open()
+sp = sd.new_page(width=480, height=220)
+sh = sp.new_shape()
+sh.draw_rect(sp.rect)
+sh.finish(color=(0.86, 0.87, 0.9), fill=(1, 1, 1), width=2)
+sh.commit()
+sp.insert_image(pymupdf.Rect(40, 60, 140, 160), filename=str(ROOT / "pdfscout" / "static" / "icon.png"))
+sp.insert_text((165, 112), "PDFScout", fontsize=34, fontname="hebo", color=(0.11, 0.13, 0.16))
+sp.insert_text((167, 142), "Edit, redact and organize PDFs", fontsize=13, fontname="helv", color=(0.42, 0.45, 0.5))
+sp.insert_text((167, 186), "Starting...", fontsize=12, fontname="helv", color=(0.78, 0.06, 0.18))
+sd[0].get_pixmap(dpi=96).save(str(ROOT / "packaging" / "splash.png"))
 print("icons written")
