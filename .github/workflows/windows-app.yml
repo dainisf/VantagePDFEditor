@@ -1,0 +1,111 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows app (installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[desktop,dev]"
+          pytest -q
+
+      - name: Build, test and package the installer
+        shell: pwsh
+        run: ./packaging/build_windows.ps1 -NoVenv
+
+      - name: Build and test the Microsoft Store package (MSIX)
+        shell: pwsh
+        run: ./packaging/build_msix.ps1 -TestInstall
+
+      - name: Show self-test and install logs
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem build -Include selftest*.txt,smoketest*.txt,pdfscout-log.txt -Recurse -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics
+          path: |
+            build/*.txt
+            !build/license.txt
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VantagePDFEditor-Setup
+          path: dist/VantagePDFEditor-Setup-*.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VantagePDFEditor-Store-MSIX
+          path: dist/VantagePDFEditor-*-Store.msix
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/VantagePDFEditor-Setup-*.exe
+
+  web:
+    name: Browser version (dtrvantage.com/tools/pdf-editor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Bridge tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pytest -q tests/test_webbridge.py
+
+      - name: Build the static site
+        run: python web/build_web.py --out dist-web
+
+      - name: Test in Chromium (served under /tools/pdf-editor/)
+        run: |
+          python tests/e2e/make_sample.py sample.pdf
+          npm install --no-save --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+          mkdir -p site/tools && cp -r dist-web site/tools/pdf-editor
+          (cd site && python -m http.server 8799 --bind 127.0.0.1 > ../http.log 2>&1 &)
+          sleep 2
+          node tests/e2e/web_e2e.js "$PWD/sample.pdf" http://127.0.0.1:8799/tools/pdf-editor/ "$PWD"
+          python -c "import pymupdf; t = pymupdf.open('web-out.pdf')[0].get_text(); assert 'example.com' not in t and '6789' not in t and '33%' in t, t; print('downloaded PDF verified')"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-screenshot
+          path: web-editor.png
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VantagePDFEditor-web
+          path: dist-web
+          include-hidden-files: true

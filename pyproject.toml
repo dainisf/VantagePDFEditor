@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdfscout"
+version = "0.2.0"
+description = "Vantage PDF Editor: self-hosted PDF editor: edit text, true redaction, annotate, organize pages, forms, protect, compress."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "DTR Networks, Inc." }]
+dependencies = [
+  "pymupdf>=1.24.10",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "python-multipart>=0.0.9",
+]
+
+[project.urls]
+Homepage = "https://dtrvantage.com/tools/pdf-editor/"
+Source = "https://github.com/dainisf/VantagePDFEditor"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+desktop = ["pywebview>=5.3"]
+build = ["pyinstaller>=6.10", "pillow>=10"]
+
+[project.scripts]
+pdfscout = "pdfscout.cli:main"
+
+[project.gui-scripts]
+pdfscout-app = "pdfscout.desktop:main"
+
+[tool.setuptools]
+packages = ["pdfscout"]
+
+[tool.setuptools.package-data]
+pdfscout = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
