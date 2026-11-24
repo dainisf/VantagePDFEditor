@@ -1456,7 +1456,7 @@
   const BRAND = () => Object.assign({
     product: "Vantage PDF Editor", publisher: "DTR Networks, Inc.",
     website: "https://dtrvantage.com/tools/pdf-editor/", toolkit_url: "https://dtrvantage.com/tools/",
-    vantage_url: "https://dtrvantage.com/", source_url: "https://github.com/dainisf/PDFScout", license: "GNU AGPL-3.0-or-later",
+    vantage_url: "https://dtrvantage.com/", source_url: "https://github.com/dainisf/VantagePDFEditor", license: "GNU AGPL-3.0-or-later",
   }, (S.caps && S.caps.brand) || {});
 
   function aboutDialog() {

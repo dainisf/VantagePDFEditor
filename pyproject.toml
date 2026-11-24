@@ -17,6 +17,10 @@ dependencies = [
   "python-multipart>=0.0.9",
 ]
 
+[project.urls]
+Homepage = "https://dtrvantage.com/tools/pdf-editor/"
+Source = "https://github.com/dainisf/VantagePDFEditor"
+
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
 desktop = ["pywebview>=5.3"]

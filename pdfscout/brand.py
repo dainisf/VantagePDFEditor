@@ -8,7 +8,7 @@ WEBSITE = "https://dtrvantage.com/tools/pdf-editor/"
 TOOLKIT_URL = "https://dtrvantage.com/tools/"
 VANTAGE_URL = "https://dtrvantage.com/"
 # AGPL-3.0: users must be able to get the corresponding source code.
-SOURCE_URL = "https://github.com/dainisf/PDFScout"
+SOURCE_URL = "https://github.com/dainisf/VantagePDFEditor"
 LICENSE_NAME = "GNU AGPL-3.0-or-later"
 
 
