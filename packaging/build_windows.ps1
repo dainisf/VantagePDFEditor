@@ -112,6 +112,18 @@ if (-not $SkipInstallTest) {
 
   Invoke-SelfTest "$dir\PDFScout.exe" "$PWD\build\selftest-installed.txt"
 
+  # Open the real window (WebView2), check the UI booted, close it.
+  Step "Opening the installed app's window (GUI smoke test)"
+  $smoke = "$PWD\build\smoketest-gui.txt"
+  if (Test-Path $smoke) { Remove-Item $smoke }
+  $p = Start-Process -FilePath "$dir\PDFScout.exe" -ArgumentList "--smoketest", "`"$smoke`"" -PassThru
+  $finished = $p.WaitForExit(120000)
+  if (-not $finished) { Stop-Process -Id $p.Id -Force; Write-Warning "GUI smoke test hung (killed after 120 s)" }
+  if (Test-Path $smoke) { Get-Content $smoke } else { Write-Warning "no smoke test report written" }
+  $appLog = Join-Path $env:LOCALAPPDATA "PDFScout\pdfscout.log"
+  if (Test-Path $appLog) { Copy-Item $appLog "$PWD\build\pdfscout-log.txt"; Write-Host "--- app log"; Get-Content $appLog -Tail 60 }
+  if (-not $finished -or $p.ExitCode -ne 0) { throw "GUI smoke test failed (exit $($p.ExitCode))" }
+
   $p = Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
   if ($p.ExitCode -ne 0) { throw "Uninstall failed ($($p.ExitCode))" }
   Start-Sleep -Seconds 3   # the uninstaller finishes removing itself asynchronously

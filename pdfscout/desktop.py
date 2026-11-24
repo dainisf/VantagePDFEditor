@@ -213,11 +213,15 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] in ("--version", "-V"):
         print(__version__)
         return 0
+    smoketest = None
+    if argv and argv[0] == "--smoketest":
+        smoketest = argv[1] if len(argv) > 1 else str(data_dir() / "smoketest.txt")
+        argv = []
     initial = next((a for a in argv if not a.startswith("-") and Path(a).is_file()), None)
     log = _setup_logging()
-    log.info("PDFScout %s starting (frozen=%s, args=%s)", __version__, getattr(sys, "frozen", False), argv)
+    log.info("PDFScout %s starting (frozen=%s, python=%s, windows=%s, args=%s)", __version__, getattr(sys, "frozen", False), sys.version.split()[0], _windows_version(), argv)
     try:
-        return _run_window(initial, log)
+        return _run_window(initial, log, smoketest)
     except Exception as e:  # noqa: BLE001 - last-resort handler: never exit silently
         log.exception("startup failed")
         _close_splash()
@@ -226,6 +230,17 @@ def main(argv: list[str] | None = None) -> int:
             hint = "\n\nPDFScout needs the Microsoft Edge WebView2 runtime. Install it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again."
         show_error(f"PDFScout could not start.\n\n{type(e).__name__}: {e}{hint}\n\nDetails were written to:\n{_log_path()}")
         return 1
+
+
+def _windows_version() -> str:
+    if sys.platform != "win32":
+        return "-"
+    try:
+        import platform
+
+        return platform.platform()
+    except Exception:  # noqa: BLE001
+        return "?"
 
 
 def _log_path() -> Path:
@@ -271,24 +286,88 @@ def _close_splash() -> None:
         pass
 
 
-def _run_window(initial: str | None, log) -> int:
+STARTUP_TIMEOUT = 45  # seconds until we tell the user something is wrong
+
+
+def _run_window(initial: str | None, log, smoketest: str | None = None) -> int:
+    import logging
+
     import webview
+
+    # pywebview reports WebView2 failures through its own logger; keep them.
+    wv_log = logging.getLogger("pywebview")
+    for h in log.handlers:
+        if h not in wv_log.handlers:
+            wv_log.addHandler(h)
+    wv_log.setLevel(logging.DEBUG if smoketest else logging.INFO)
 
     base, _ = start_server()
     log.info("engine listening at %s", base)
     api = DesktopApi(base, str(Path(initial).resolve()) if initial else None)
     window = webview.create_window(APP_NAME, base + "/", js_api=api, width=1400, height=900, min_size=(860, 560), text_select=True, background_color="#EEF0F3")
     api._attach(window)
+    state = {"shown": False, "loaded": False, "exit": 0}
+    loaded_evt = threading.Event()
 
     def _shown():
+        state["shown"] = True
         log.info("window shown")
-        _close_splash()
+
+    def _loaded():
+        state["loaded"] = True
+        loaded_evt.set()
+        log.info("page loaded (renderer=%s)", getattr(webview, "renderer", "?"))
 
     window.events.shown += _shown
+    window.events.loaded += _loaded
+
+    def _watchdog():
+        if loaded_evt.wait(STARTUP_TIMEOUT):
+            return
+        log.error("window did not load within %ss (shown=%s)", STARTUP_TIMEOUT, state["shown"])
+        if smoketest:
+            Path(smoketest).write_text(f"SMOKETEST FAILED: window not loaded after {STARTUP_TIMEOUT}s (shown={state['shown']})\n", encoding="utf-8")
+            os._exit(3)
+        show_error(
+            "PDFScout started but its window did not open.\n\n"
+            "This usually means the Microsoft Edge WebView2 runtime is missing or damaged. "
+            "Reinstall it from https://go.microsoft.com/fwlink/p/?LinkId=2124703 and try again.\n\n"
+            f"Details were written to:\n{_log_path()}"
+        )
+        os._exit(2)
+
+    threading.Thread(target=_watchdog, name="pdfscout-watchdog", daemon=True).start()
+
+    def _after_start():
+        if not smoketest:
+            return
+        if not loaded_evt.wait(STARTUP_TIMEOUT):
+            return  # watchdog reports
+        report = []
+        try:
+            for _ in range(40):  # wait for app.js to boot
+                ok = window.evaluate_js("!!(document.querySelector('#toolstrip .tool') && window.pywebview && window.pywebview.api)")
+                if ok:
+                    break
+                time.sleep(0.25)
+            report.append(f"renderer: {getattr(webview, 'renderer', '?')}")
+            report.append(f"ui booted: {bool(ok)}")
+            report.append(f"title: {window.evaluate_js('document.title')}")
+            state["exit"] = 0 if ok else 4
+        except Exception as e:  # noqa: BLE001
+            report.append(f"error: {e!r}")
+            state["exit"] = 5
+        report.append("SMOKETEST " + ("PASSED" if state["exit"] == 0 else "FAILED"))
+        Path(smoketest).write_text("\n".join(report) + "\n", encoding="utf-8")
+        log.info("smoketest: %s", report)
+        window.destroy()
+
     icon = Path(__file__).parent / "static" / "icon.png"
-    webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(icon) if icon.exists() else None)
+    log.info("opening window")
+    _close_splash()  # never let the splash overlap or block the real window
+    webview.start(_after_start, private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(icon) if icon.exists() else None, debug=False)
     log.info("window closed")
-    return 0
+    return state["exit"]
 
 
 if __name__ == "__main__":  # pragma: no cover

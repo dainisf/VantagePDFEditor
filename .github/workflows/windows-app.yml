@@ -30,7 +30,17 @@ jobs:
       - name: Show self-test and install logs
         if: always()
         shell: pwsh
-        run: Get-ChildItem build -Filter selftest*.txt -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
+        run: Get-ChildItem build -Include selftest*.txt,smoketest*.txt,pdfscout-log.txt -Recurse -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_ }
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics
+          path: |
+            build/*.txt
+            !build/license.txt
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
