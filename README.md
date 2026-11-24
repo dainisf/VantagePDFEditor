@@ -16,6 +16,24 @@ pdfscout serve            # → http://127.0.0.1:8000
 
 Optional: install [Tesseract](https://github.com/tesseract-ocr/tesseract) (`apt install tesseract-ocr` / `brew install tesseract`) to enable OCR.
 
+## Windows desktop app
+
+PDFScout can run as a normal Windows program, without a browser. It opens its own window and uses the standard Windows Open/Save dialogs. The title bar shows `•` when there are unsaved changes, and you're asked before closing with unsaved work.
+
+**Get `PDFScout.exe`:** every push builds it on Windows via GitHub Actions. Open the **Actions** tab, then the latest **Windows app** run, and download the **PDFScout-windows** artifact. Tagging a release (`v0.1.0`) also attaches the .exe to the GitHub release. It's a single file with nothing to install. You can double-click it, drag a PDF onto it, or use *Open with → PDFScout*.
+
+**Build it yourself** (Windows, Python 3.10+):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+```
+
+This produces `dist\PDFScout.exe` and runs a packaging self-test.
+
+**Run from source without building:** `pip install -e ".[desktop]"`, then `pdfscout-app [file.pdf]`.
+
+Requirements: Windows 10 or 11 with the Microsoft Edge WebView2 runtime, which is preinstalled on current Windows. The window is rendered by WebView2, and the PDF engine runs inside the same process on a private localhost port, so no data leaves the PC. The .exe isn't code-signed, so SmartScreen may warn on first launch (*More info → Run anyway*).
+
 ## Features
 
 | Area | What you can do |
@@ -81,6 +99,7 @@ pdfscout/
   store.py    in-memory document sessions with an undo/redo version stack
   server.py   FastAPI JSON API + static UI
   cli.py      command-line interface
+  desktop.py  native-window desktop app (pywebview) + packaging self-test
   static/     index.html, app.js, styles.css (no build step)
 tests/        pytest suites for core, API and CLI
 ```

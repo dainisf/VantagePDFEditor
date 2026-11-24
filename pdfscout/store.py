@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import threading
 import time
 import uuid
@@ -14,12 +15,16 @@ import pymupdf
 from . import core
 
 
+_version_ids = itertools.count(1)
+
+
 @dataclass
 class Session:
     id: str
     filename: str
     versions: list[bytes]
     labels: list[str]
+    ids: list[int] = field(default_factory=lambda: [next(_version_ids)])
     index: int = 0
     lock: threading.RLock = field(default_factory=threading.RLock)
     touched: float = field(default_factory=time.time)
@@ -28,8 +33,8 @@ class Session:
 
     @property
     def version(self) -> int:
-        """Monotonic-ish id of the current state, for cache busting."""
-        return self.index
+        """Unique id of the current state (never reused, safe for caching)."""
+        return self.ids[self.index]
 
     def doc(self) -> pymupdf.Document:
         """Read-only handle to the current version (cached)."""
@@ -50,7 +55,7 @@ class Session:
         return {
             "id": self.id,
             "filename": self.filename,
-            "version": self.index,
+            "version": self.version,
             "can_undo": self.can_undo(),
             "can_redo": self.can_redo(),
             "undo_label": self.labels[self.index] if self.can_undo() else None,
@@ -125,13 +130,16 @@ class DocumentStore:
                 doc.close()
             del sess.versions[sess.index + 1 :]
             del sess.labels[sess.index + 1 :]
+            del sess.ids[sess.index + 1 :]
             sess.versions.append(data)
             sess.labels.append(label)
+            sess.ids.append(next(_version_ids))
             sess.index += 1
             overflow = len(sess.versions) - self.max_history
             if overflow > 0:
                 del sess.versions[:overflow]
                 del sess.labels[:overflow]
+                del sess.ids[:overflow]
                 sess.index -= overflow
                 sess._doc_index = -1
 

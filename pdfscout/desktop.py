@@ -1,0 +1,229 @@
+"""PDFScout as a desktop application.
+
+Runs the editor engine on a private localhost port inside this process and
+shows the UI in a native window (Edge WebView2 on Windows, WebKit on macOS,
+GTK/Qt on Linux) via pywebview. Opening and saving use the operating
+system's own file dialogs.
+
+    pdfscout-app [file.pdf]
+    pdfscout-app --selftest report.txt     # headless packaging check
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import socket
+import sys
+import threading
+import time
+import traceback
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from . import __version__, core
+
+APP_NAME = "PDFScout"
+PDF_TYPES = ("PDF files (*.pdf)", "Documents and images (*.pdf;*.xps;*.epub;*.png;*.jpg;*.jpeg;*.tif;*.tiff)", "All files (*.*)")
+
+
+def _fix_std_streams() -> None:
+    """Windowed (no-console) builds have sys.stdout/stderr = None."""
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+
+
+def data_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    d = Path(base) / APP_NAME
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def start_server() -> tuple[str, object]:
+    """Start the API on a random localhost port in a daemon thread."""
+    import uvicorn
+
+    from .server import app
+
+    port = _free_port()
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None, log_level="warning", loop="asyncio", http="h11", ws="none", lifespan="off")
+    server = uvicorn.Server(config)
+    threading.Thread(target=server.run, name="pdfscout-server", daemon=True).start()
+    deadline = time.time() + 20
+    while not server.started:
+        if time.time() > deadline:
+            raise RuntimeError("PDFScout engine did not start")
+        time.sleep(0.05)
+    return f"http://127.0.0.1:{port}", server
+
+
+class DesktopApi:
+    """Methods exposed to the page as ``window.pywebview.api.*``."""
+
+    def __init__(self, base_url: str, initial_file: str | None = None):
+        self._base = base_url
+        self._initial = initial_file
+        self._window = None
+        self._dirty = False
+        self._last_dir = str(Path.home() / "Documents") if (Path.home() / "Documents").is_dir() else str(Path.home())
+
+    # -- wiring ----------------------------------------------------------
+    def _attach(self, window) -> None:
+        self._window = window
+        window.events.closing += self._on_closing
+
+    def _on_closing(self):
+        if not self._dirty:
+            return True
+        return bool(self._window.create_confirmation_dialog(APP_NAME, "You have changes that haven't been saved. Close anyway?"))
+
+    # -- called from JS --------------------------------------------------
+    def info(self) -> dict:
+        return {"version": __version__, "desktop": True}
+
+    def initial_file(self) -> str | None:
+        f, self._initial = self._initial, None
+        return f
+
+    def set_state(self, title: str, dirty: bool) -> None:
+        self._dirty = bool(dirty)
+        if self._window is not None:
+            self._window.set_title(f"{'• ' if dirty else ''}{title} – {APP_NAME}" if title else APP_NAME)
+
+    def choose_open(self) -> str | None:
+        import webview
+
+        res = self._window.create_file_dialog(webview.FileDialog.OPEN, directory=self._last_dir, file_types=PDF_TYPES)
+        if not res:
+            return None
+        path = res[0] if isinstance(res, (list, tuple)) else res
+        self._last_dir = str(Path(path).parent)
+        return path
+
+    def open_path(self, path: str, password: str | None = None) -> dict:
+        """Open a file from disk into a new editing session."""
+        from .server import _snapshot, store
+
+        try:
+            data = Path(path).read_bytes()
+            sess = store.create(data, Path(path).name, password or None)
+        except core.PDFScoutError as e:
+            msg = str(e)
+            return {"error": msg, "needs_password": "password" in msg.lower(), "path": path, "name": Path(path).name}
+        except OSError as e:
+            return {"error": f"Cannot read {path}: {e.strerror or e}"}
+        return {"snapshot": _snapshot(sess), "path": path}
+
+    def save_download(self, api_path: str, body: dict | None, suggested: str) -> dict | None:
+        """Ask where to save, then write the server's response for api_path there."""
+        import webview
+
+        ext = Path(suggested).suffix.lower() or ".pdf"
+        types = {".pdf": ("PDF files (*.pdf)",), ".zip": ("ZIP archives (*.zip)",), ".txt": ("Text files (*.txt)",), ".html": ("HTML files (*.html)",)}.get(ext, ())
+        res = self._window.create_file_dialog(webview.FileDialog.SAVE, directory=self._last_dir, save_filename=suggested, file_types=types + ("All files (*.*)",))
+        if not res:
+            return None
+        target = res[0] if isinstance(res, (list, tuple)) else res
+        if not Path(target).suffix:
+            target += ext
+        if not api_path.startswith("/api/"):
+            return {"error": "Invalid export path"}
+        req = urllib.request.Request(self._base + api_path, data=json.dumps(body or {}).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                data = r.read()
+        except urllib.error.HTTPError as e:
+            try:
+                detail = json.loads(e.read()).get("detail", str(e))
+            except Exception:  # noqa: BLE001
+                detail = str(e)
+            return {"error": detail}
+        try:
+            Path(target).write_bytes(data)
+        except OSError as e:
+            return {"error": f"Cannot write {target}: {e.strerror or e}"}
+        self._last_dir = str(Path(target).parent)
+        return {"path": target, "name": Path(target).name}
+
+    def mark_saved(self) -> None:
+        self._dirty = False
+
+
+def selftest(report: str | None) -> int:
+    """Start the engine, round-trip a document through the API, report."""
+    out = io.StringIO()
+    ok = True
+    try:
+        base, _ = start_server()
+        out.write(f"PDFScout {__version__} engine at {base}\n")
+        caps = json.loads(urllib.request.urlopen(base + "/api/capabilities", timeout=20).read())
+        out.write(f"capabilities: ocr={caps['ocr']} ops={len(caps['ops'])}\n")
+        html = urllib.request.urlopen(base + "/", timeout=20).read().decode()
+        assert "PDFScout" in html, "UI not bundled"
+        js = urllib.request.urlopen(base + "/static/app.js", timeout=20).read()
+        assert len(js) > 10000, "app.js missing"
+        import pymupdf
+
+        d = pymupdf.open()
+        d.new_page().insert_text((72, 72), "Self-test jane@example.com")
+        tmp = data_dir() / "selftest.pdf"
+        tmp.write_bytes(d.tobytes())
+        api = DesktopApi(base)
+        res = api.open_path(str(tmp))
+        assert "snapshot" in res, res
+        sid = res["snapshot"]["id"]
+        req = urllib.request.Request(base + f"/api/documents/{sid}/ops/redact_search", data=b'{"presets":["email"]}', headers={"Content-Type": "application/json"}, method="POST")
+        assert json.loads(urllib.request.urlopen(req, timeout=60).read())["result"] == 1
+        png = urllib.request.urlopen(base + f"/api/documents/{sid}/pages/0/image?scale=1", timeout=60).read()
+        assert png[:4] == b"\x89PNG"
+        tmp.unlink(missing_ok=True)
+        out.write("document round-trip: ok\n")
+        if sys.platform == "win32":
+            import webview.platforms.winforms  # noqa: F401  (pythonnet + WebView2 bindings bundled)
+
+            out.write("webview backend: winforms ok\n")
+    except Exception:  # noqa: BLE001
+        ok = False
+        out.write(traceback.format_exc())
+    out.write("SELFTEST " + ("PASSED" if ok else "FAILED") + "\n")
+    text = out.getvalue()
+    if report:
+        Path(report).write_text(text, encoding="utf-8")
+    else:
+        sys.stdout.write(text)
+    return 0 if ok else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    _fix_std_streams()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "--selftest":
+        return selftest(argv[1] if len(argv) > 1 else None)
+    if argv and argv[0] in ("--version", "-V"):
+        print(__version__)
+        return 0
+    initial = next((a for a in argv if not a.startswith("-") and Path(a).is_file()), None)
+
+    import webview
+
+    base, _ = start_server()
+    api = DesktopApi(base, str(Path(initial).resolve()) if initial else None)
+    window = webview.create_window(APP_NAME, base + "/", js_api=api, width=1400, height=900, min_size=(860, 560), text_select=True, background_color="#EEF0F3")
+    api._attach(window)
+    icon = Path(__file__).parent / "static" / "icon.png"
+    webview.start(private_mode=False, storage_path=str(data_dir() / "webview"), icon=str(icon) if icon.exists() else None)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

@@ -27,7 +27,7 @@ def sid(client):
     r = client.post("/api/documents", files={"file": ("test.pdf", make_pdf(), "application/pdf")})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["page_count"] == 2 and body["version"] == 0 and not body["can_undo"]
+    assert body["page_count"] == 2 and not body["can_undo"]
     return body["id"]
 
 
@@ -62,7 +62,15 @@ def test_edit_undo_redo(client, sid):
     texts = [l["text"] for l in client.get(f"/api/documents/{sid}/pages/0/text").json()["lines"]]
     assert texts[0].startswith("Hello")
     r = client.post(f"/api/documents/{sid}/redo").json()
-    assert r["version"] == 1 and not r["can_redo"]
+    assert not r["can_redo"]
+
+
+def test_versions_are_never_reused(client, sid):
+    v0 = client.get(f"/api/documents/{sid}").json()["version"]
+    v1 = client.post(f"/api/documents/{sid}/ops/rotate", json={"pages": [0]}).json()["version"]
+    assert client.post(f"/api/documents/{sid}/undo").json()["version"] == v0
+    v2 = client.post(f"/api/documents/{sid}/ops/rotate", json={"pages": [1]}).json()["version"]
+    assert len({v0, v1, v2}) == 3
 
 
 def test_search_and_redact(client, sid):

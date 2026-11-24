@@ -168,11 +168,71 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
+  // Desktop app (pywebview): native dialogs instead of browser downloads/uploads.
+  const desktop = () => (window.pywebview && window.pywebview.api) || null;
+  const docStem = () => (S.doc ? S.doc.filename.replace(/\.[^.]+$/, "") : "document");
+
   async function download(path, body, fallback = "download") {
+    const isFullSave = path.endsWith("/download") && !(body && (body.user_password || body.owner_password));
+    const savedVersion = S.doc && S.doc.version;
+    const dk = desktop();
+    if (dk) {
+      try {
+        busy(true, "Saving…");
+        const r = await dk.save_download(path, body || {}, fallback);
+        if (!r) return;
+        if (r.error) return toast(r.error, "error");
+        toast(`Saved ${r.name}`);
+        if (isFullSave) markSaved(savedVersion);
+      } catch (e) { handleError(e); } finally { busy(false); }
+      return;
+    }
     try {
       const res = await api(path, { method: "POST", json: body || {}, raw: true, busyText: "Preparing download…" });
       await downloadResponse(res, fallback);
+      if (isFullSave) markSaved(savedVersion);
     } catch (e) { handleError(e); }
+  }
+  function markSaved(version) {
+    S.savedVersion = version;
+    updateTitle();
+  }
+  const isDirty = () => !!S.doc && S.savedVersion !== S.doc.version;
+  function updateTitle() {
+    if (!S.doc) return;
+    document.title = `${isDirty() ? "• " : ""}${S.doc.filename} – PDFScout`;
+    const dk = desktop();
+    if (dk) dk.set_state(S.doc.filename, isDirty()).catch(() => {});
+  }
+  window.addEventListener("beforeunload", (e) => { if (!desktop() && isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+  function installDoc(snap) {
+    if (S.doc) api(docPath(), { method: "DELETE", quiet: true }).catch(() => {});
+    resetDocState();
+    S.savedVersion = snap.version;
+    setDoc(snap);
+    fitWidth();
+  }
+
+  async function nativeOpen(path) {
+    const dk = desktop();
+    if (!path) path = await dk.choose_open();
+    if (!path) return;
+    let password = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      busy(true, "Opening…");
+      let r;
+      try { r = await dk.open_path(path, password); } finally { busy(false); }
+      if (r.snapshot) { installDoc(r.snapshot); return; }
+      if (r.needs_password) {
+        if (password) toast("Incorrect password", "error");
+        password = await askPassword(r.name || path);
+        if (password == null) return;
+        continue;
+      }
+      toast(r.error || "Could not open the file", "error");
+      return;
+    }
   }
 
   function pickFile(accept, multiple = false) {
@@ -217,10 +277,7 @@
       if (password) fd.append("password", password);
       try {
         const snap = await api("/api/documents", { method: "POST", form: fd, busyText: `Opening ${file.name}…` });
-        if (S.doc) api(docPath(), { method: "DELETE", quiet: true }).catch(() => {});
-        resetDocState();
-        setDoc(snap);
-        fitWidth();
+        installDoc(snap);
         return;
       } catch (e) {
         if (/password/i.test(e.message)) {
@@ -238,8 +295,7 @@
   async function newBlank() {
     try {
       const snap = await api("/api/documents/blank", { method: "POST", json: { size: "a4", pages: 1 } });
-      if (S.doc) api(docPath(), { method: "DELETE", quiet: true }).catch(() => {});
-      resetDocState(); setDoc(snap); fitWidth();
+      installDoc(snap);
     } catch (e) { handleError(e); }
   }
 
@@ -250,8 +306,7 @@
     files.forEach((f) => fd.append("files", f));
     try {
       const snap = await api("/api/documents/from-images", { method: "POST", form: fd, busyText: "Creating PDF…" });
-      if (S.doc) api(docPath(), { method: "DELETE", quiet: true }).catch(() => {});
-      resetDocState(); setDoc(snap); fitWidth();
+      installDoc(snap);
     } catch (e) { handleError(e); }
   }
 
@@ -266,7 +321,7 @@
     const versionChanged = !S.doc || S.doc.version !== snap.version || S.doc.id !== snap.id;
     S.doc = snap;
     document.body.classList.add("has-doc");
-    document.title = `${snap.filename} – PDFScout`;
+    updateTitle();
     $('[data-action="undo"]').disabled = !snap.can_undo;
     $('[data-action="undo"]').title = snap.can_undo ? `Undo ${snap.undo_label} (Ctrl+Z)` : "Nothing to undo";
     $('[data-action="redo"]').disabled = !snap.can_redo;
@@ -1050,7 +1105,7 @@
           if (a === "rotL" || a === "rotR") await op("rotate", { pages, angle: a === "rotL" ? -90 : 90 });
           if (a === "del") { if (await confirmDialog("Delete pages", `Delete ${pages.length} page${pages.length === 1 ? "" : "s"}?`, "Delete", true)) { S.selected.clear(); await op("delete_pages", { pages }); } }
           if (a === "dup") { const order = []; for (let i = 0; i < n; i++) { order.push(i); if (pages.includes(i)) order.push(i); } await op("reorder", { order }, "Duplicated"); }
-          if (a === "extract") await download(docPath("/export/extract"), { pages }, "extract.pdf");
+          if (a === "extract") await download(docPath("/export/extract"), { pages }, `${docStem()}-extract.pdf`);
           if (a === "blank") await op("insert_blank", { at: Math.max(...pages) + 1 });
           if (a === "reverse") await op("reorder", { order: [...Array(n).keys()].reverse() });
           if (a === "order") {
@@ -1118,9 +1173,9 @@
         <form data-extract>${pagesField("Pages to extract", "e.g. 2, 5-7")}<div class="actions"><button class="btn" type="submit">Extract to new PDF</button></div></form>`;
       const f = $("form", body);
       f.ranges.oninput = () => (f.mode.value = "ranges");
-      f.onsubmit = (e) => { e.preventDefault(); download(docPath("/export/split"), f.mode.value === "every" ? { every: +f.every.value || 1 } : { ranges: f.ranges.value }, "split.zip"); };
+      f.onsubmit = (e) => { e.preventDefault(); download(docPath("/export/split"), f.mode.value === "every" ? { every: +f.every.value || 1 } : { ranges: f.ranges.value }, `${docStem()}-split.zip`); };
       const x = $("[data-extract]", body);
-      x.onsubmit = (e) => { e.preventDefault(); if (!x.pages.value.trim()) return toast("Enter the pages to extract", "error"); download(docPath("/export/extract"), { pages: x.pages.value }, "extract.pdf"); };
+      x.onsubmit = (e) => { e.preventDefault(); if (!x.pages.value.trim()) return toast("Enter the pages to extract", "error"); download(docPath("/export/extract"), { pages: x.pages.value }, `${docStem()}-extract.pdf`); };
     },
 
     watermark(body) {
@@ -1218,7 +1273,7 @@
         e.preventDefault();
         if (!f.user.value && !f.owner.value) return toast("Enter at least one password", "error");
         const permissions = ["print", "copy", "modify", "annotate"].filter((k) => f[k].checked);
-        download(docPath("/download"), { user_password: f.user.value, owner_password: f.owner.value, permissions }, "protected.pdf");
+        download(docPath("/download"), { user_password: f.user.value, owner_password: f.owner.value, permissions }, `${docStem()}-protected.pdf`);
       };
     },
 
@@ -1256,7 +1311,7 @@
         op("optimize", { image_dpi: +f.dpi.value || null, image_quality: +f.quality.value, subset_fonts: f.fonts.checked },
           () => `Size: ${(before / 1048576).toFixed(2)} MB → ${(S.doc.size / 1048576).toFixed(2)} MB`).catch(() => {});
       };
-      $("[data-dl]", body).onclick = () => download(docPath("/download"), { compress: true }, "compressed.pdf");
+      $("[data-dl]", body).onclick = () => download(docPath("/download"), { compress: true }, `${docStem()}-compressed.pdf`);
     },
 
     flatten(body) {
@@ -1278,10 +1333,10 @@
         <hr class="sep"><div class="tool-section">PDF</div>
         <div class="actions"><button class="btn" data-pdf>Download PDF</button><button class="btn" data-new>New PDF from images…</button></div>`;
       const fi = $("[data-img]", body);
-      fi.onsubmit = (e) => { e.preventDefault(); download(docPath("/export/images"), { format: fi.format.value, dpi: +fi.dpi.value, pages: fi.pages.value || null }, "images.zip"); };
-      $("[data-txt]", body).onclick = () => download(docPath("/export/text"), {}, "document.txt");
-      $("[data-html]", body).onclick = () => download(docPath("/export/html"), {}, "document.html");
-      $("[data-pdf]", body).onclick = () => download(docPath("/download"), {}, "document.pdf");
+      fi.onsubmit = (e) => { e.preventDefault(); download(docPath("/export/images"), { format: fi.format.value, dpi: +fi.dpi.value, pages: fi.pages.value || null }, `${docStem()}-images.zip`); };
+      $("[data-txt]", body).onclick = () => download(docPath("/export/text"), {}, `${docStem()}.txt`);
+      $("[data-html]", body).onclick = () => download(docPath("/export/html"), {}, `${docStem()}.html`);
+      $("[data-pdf]", body).onclick = () => download(docPath("/download"), {}, `${docStem()}.pdf`);
       $("[data-new]", body).onclick = fromImages;
     },
 
@@ -1331,10 +1386,13 @@
 
   // ------------------------------------------------------------------ actions & keyboard
   const ACTIONS = {
-    open: () => $("#fileOpen").click(),
+    open: async () => {
+      if (isDirty() && !(await confirmDialog("Open another file", "Your changes to the current document haven't been saved. Open another file anyway?", "Open"))) return;
+      desktop() ? nativeOpen() : $("#fileOpen").click();
+    },
     new: newBlank,
     "from-images": fromImages,
-    save: () => S.doc && download(docPath("/download"), {}, S.doc.filename),
+    save: () => S.doc && download(docPath("/download"), {}, `${docStem()}.pdf`),
     undo: async () => { if (!S.doc?.can_undo) return; try { setDoc(await api(docPath("/undo"), { method: "POST", quiet: true })); } catch (e) { handleError(e); } },
     redo: async () => { if (!S.doc?.can_redo) return; try { setDoc(await api(docPath("/redo"), { method: "POST", quiet: true })); } catch (e) { handleError(e); } },
     "zoom-in": () => zoomTo(Math.round((S.zoom + (S.zoom >= 1 ? 0.25 : 0.1)) * 100) / 100),
@@ -1406,6 +1464,14 @@
     renderPanel(null);
     setTool("select");
     try { S.caps = await api("/api/capabilities", { quiet: true }); } catch (_) {}
+    const onDesktop = async () => {
+      document.body.classList.add("desktop");
+      $('[data-action="save"] span').textContent = "Save";
+      $('[data-action="save"]').title = "Save a copy (Ctrl+S)";
+      $(".drop .muted").textContent = "Everything stays on this computer.";
+      try { const f = await desktop().initial_file(); if (f) nativeOpen(f); } catch (_) {}
+    };
+    if (desktop()) onDesktop(); else window.addEventListener("pywebviewready", onDesktop, { once: true });
   }
   boot();
 })();
